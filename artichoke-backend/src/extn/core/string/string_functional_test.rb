@@ -15,6 +15,8 @@ def spec
   test_string_end_with
   test_string_to_i
   test_string_to_f
+  test_string_hex
+  test_string_oct
   test_string_eq
 
   test_string_concat
@@ -414,6 +416,102 @@ def test_string_to_f
   # Failed conversions return 0.0.
   raise "Expected 0.0, got #{'bad'.to_f.inspect}" unless 'bad'.to_f == 0.0
   raise "Expected 0.0, got #{'thx1138'.to_f.inspect}" unless 'thx1138'.to_f == 0.0
+end
+
+########################################
+# 10c. hex
+########################################
+
+def test_string_hex
+  # Leading hex digits without prefix.
+  raise "Expected 10, got #{'0a'.hex.inspect}" unless '0a'.hex == 10
+  raise "Expected 0, got #{'0o'.hex.inspect}" unless '0o'.hex == 0
+  raise "Expected 0, got #{'0x'.hex.inspect}" unless '0x'.hex == 0
+  raise "Expected 0xABADBABE, got #{'A_BAD_BABE'.hex.inspect}" unless 'A_BAD_BABE'.hex == 0xABADBABE
+
+  # 0b/0d prefixes are NOT treated specially — the leading `0` is just a
+  # hex digit; parsing stops at the first non-hex character.
+  raise "Expected == 'b1010'.hex" unless '0b1010'.hex == 'b1010'.hex
+  raise "Expected == 'd500'.hex" unless '0d500'.hex == 'd500'.hex
+
+  # Stops at first non-hex character.
+  raise "Expected 0xabcdef, got #{'abcdefG'.hex.inspect}" unless 'abcdefG'.hex == 0xabcdef
+
+  # Repeated underscores terminate the parse.
+  raise "Expected 0xa, got #{'a__b'.hex.inspect}" unless 'a__b'.hex == 0xa
+  raise "Expected 0xa, got #{'a____b'.hex.inspect}" unless 'a____b'.hex == 0xa
+  raise "Expected 0xa, got #{'a___f'.hex.inspect}" unless 'a___f'.hex == 0xa
+
+  # Optional sign.
+  raise "Expected -4660, got #{'-1234'.hex.inspect}" unless '-1234'.hex == -4660
+  raise "Expected 4660, got #{'+1234'.hex.inspect}" unless '+1234'.hex == 4660
+
+  # Optional 0x prefix and signed prefix.
+  raise "Expected 10, got #{'0x0a'.hex.inspect}" unless '0x0a'.hex == 10
+  raise "Expected -1, got #{'-0x1'.hex.inspect}" unless '-0x1'.hex == -1
+
+  # Sign must come before the 0x prefix.
+  raise "Expected 0, got #{'0x-1'.hex.inspect}" unless '0x-1'.hex == 0
+
+  # Invalid / empty inputs return 0.
+  raise "Expected 0, got #{''.hex.inspect}" unless ''.hex == 0
+  raise "Expected 0, got #{'+-5'.hex.inspect}" unless '+-5'.hex == 0
+  raise "Expected 0, got #{'wombat'.hex.inspect}" unless 'wombat'.hex == 0
+  raise "Expected 0, got #{'0x0x42'.hex.inspect}" unless '0x0x42'.hex == 0
+
+  # Leading underscore is invalid.
+  raise "Expected 0, got #{'_a'.hex.inspect}" unless '_a'.hex == 0
+  raise "Expected 0, got #{'___b'.hex.inspect}" unless '___b'.hex == 0
+  raise "Expected 0, got #{'___0xc'.hex.inspect}" unless '___0xc'.hex == 0
+end
+
+########################################
+# 10d. oct
+########################################
+
+def test_string_oct
+  # Default base is 8.
+  raise "Expected 0, got #{'0'.oct.inspect}" unless '0'.oct == 0
+  raise "Expected 077, got #{'77'.oct.inspect}" unless '77'.oct == 077
+  raise "Expected 077, got #{'077'.oct.inspect}" unless '077'.oct == 077
+
+  # 0b / 0x / 0d prefixes switch base.
+  raise "Expected 0b1010, got #{'0b1010'.oct.inspect}" unless '0b1010'.oct == 0b1010
+  raise "Expected 0xFF, got #{'0xFF'.oct.inspect}" unless '0xFF'.oct == 0xFF
+  raise "Expected 500, got #{'0d500'.oct.inspect}" unless '0d500'.oct == 500
+
+  # Leading minus sign.
+  raise "Expected -01234, got #{'-12348'.oct.inspect}" unless '-12348'.oct == -01234
+  raise "Expected -0b0101, got #{'-0b0101'.oct.inspect}" unless '-0b0101'.oct == -0b0101
+  raise "Expected -0xEE, got #{'-0xEE'.oct.inspect}" unless '-0xEE'.oct == -0xEE
+  raise "Expected -500, got #{'-0d500'.oct.inspect}" unless '-0d500'.oct == -500
+
+  # Leading plus sign.
+  raise "Expected 01234, got #{'+12348'.oct.inspect}" unless '+12348'.oct == 01234
+  raise "Expected 0b1010, got #{'+0b1010'.oct.inspect}" unless '+0b1010'.oct == 0b1010
+  raise "Expected 0xFF, got #{'+0xFF'.oct.inspect}" unless '+0xFF'.oct == 0xFF
+  raise "Expected 500, got #{'+0d500'.oct.inspect}" unless '+0d500'.oct == 500
+
+  # Single underscore separator is allowed.
+  raise "Expected 0755_333, got #{'755_333'.oct.inspect}" unless '755_333'.oct == 0755_333
+
+  # Double underscores terminate the parse.
+  raise "Expected 07, got #{'7__3'.oct.inspect}" unless '7__3'.oct == 07
+  raise "Expected 07, got #{'7___3'.oct.inspect}" unless '7___3'.oct == 07
+  raise "Expected 07, got #{'7__5'.oct.inspect}" unless '7__5'.oct == 07
+
+  # Invalid digits stop the parse.
+  raise "Expected 0, got #{'0o'.oct.inspect}" unless '0o'.oct == 0
+  raise "Expected 0567, got #{'5678'.oct.inspect}" unless '5678'.oct == 0567
+
+  # Empty / garbage inputs return 0.
+  raise "Expected 0, got #{''.oct.inspect}" unless ''.oct == 0
+  raise "Expected 0, got #{'+-5'.oct.inspect}" unless '+-5'.oct == 0
+  raise "Expected 0, got #{'wombat'.oct.inspect}" unless 'wombat'.oct == 0
+
+  # Leading underscore is always an error.
+  raise "Expected 0, got #{'_7'.oct.inspect}" unless '_7'.oct == 0
+  raise "Expected 0, got #{'_07'.oct.inspect}" unless '_07'.oct == 0
 end
 
 ########################################

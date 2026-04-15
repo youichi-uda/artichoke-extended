@@ -591,8 +591,79 @@ class String
   # def hash; end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-hex
+  #
+  # Treats leading characters of `self` as a string of hexadecimal digits
+  # (with optional sign and optional `0x`/`0X` prefix) and returns the
+  # corresponding number as an Integer. Returns `0` if the conversion fails.
+  # Matches ruby/spec `core/string/hex_spec.rb`.
   def hex
-    raise NotImplementedError
+    bytes = self.b.bytes
+    i = 0
+    len = bytes.length
+
+    # Optional sign.
+    sign = 1
+    if i < len
+      case bytes[i]
+      when 0x2B # '+'
+        i += 1
+      when 0x2D # '-'
+        sign = -1
+        i += 1
+      end
+    end
+
+    # Optional 0x / 0X prefix.
+    if i + 1 < len && bytes[i] == 0x30 && (bytes[i + 1] == 0x78 || bytes[i + 1] == 0x58)
+      i += 2
+    end
+
+    # There must be at least one hex digit before any underscore.
+    return 0 if i >= len
+
+    first = bytes[i]
+    hex_digit = (first >= 0x30 && first <= 0x39) || # 0-9
+                (first >= 0x41 && first <= 0x46) || # A-F
+                (first >= 0x61 && first <= 0x66)    # a-f
+    return 0 unless hex_digit
+
+    result = 0
+    prev_was_underscore = false
+    while i < len
+      c = bytes[i]
+      if (c >= 0x30 && c <= 0x39)
+        result = (result << 4) | (c - 0x30)
+        prev_was_underscore = false
+        i += 1
+      elsif c >= 0x41 && c <= 0x46
+        result = (result << 4) | (c - 0x41 + 10)
+        prev_was_underscore = false
+        i += 1
+      elsif c >= 0x61 && c <= 0x66
+        result = (result << 4) | (c - 0x61 + 10)
+        prev_was_underscore = false
+        i += 1
+      elsif c == 0x5F # '_'
+        # Two underscores in a row terminate the parse. A trailing underscore
+        # at the end of the input also terminates.
+        break if prev_was_underscore
+        break if i + 1 >= len
+
+        nxt = bytes[i + 1]
+        is_next_hex = (nxt >= 0x30 && nxt <= 0x39) ||
+                      (nxt >= 0x41 && nxt <= 0x46) ||
+                      (nxt >= 0x61 && nxt <= 0x66) ||
+                      nxt == 0x5F
+        break unless is_next_hex
+
+        prev_was_underscore = true
+        i += 1
+      else
+        break
+      end
+    end
+
+    sign * result
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-include-3F
@@ -715,8 +786,103 @@ class String
   alias succ! next!
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-oct
+  #
+  # Parses a leading integer from `self`. Defaults to base 8, but honours
+  # `0b`, `0d`, `0o`, and `0x` prefixes to switch base. Optional sign is
+  # accepted before the prefix. Returns `0` on failure. Matches ruby/spec
+  # `core/string/oct_spec.rb`.
   def oct
-    raise NotImplementedError
+    bytes = self.b.bytes
+    i = 0
+    len = bytes.length
+
+    # Optional leading whitespace is not stripped by CRuby's oct, but a
+    # leading underscore is an error.
+    sign = 1
+    if i < len
+      case bytes[i]
+      when 0x2B # '+'
+        i += 1
+      when 0x2D # '-'
+        sign = -1
+        i += 1
+      end
+    end
+
+    # Optional base prefix after optional sign.
+    base = 8
+    if i + 1 < len && bytes[i] == 0x30
+      case bytes[i + 1]
+      when 0x62, 0x42 # 'b' / 'B'
+        base = 2
+        i += 2
+      when 0x64, 0x44 # 'd' / 'D'
+        base = 10
+        i += 2
+      when 0x6F, 0x4F # 'o' / 'O'
+        base = 8
+        i += 2
+      when 0x78, 0x58 # 'x' / 'X'
+        base = 16
+        i += 2
+      end
+    end
+
+    return 0 if i >= len
+
+    max_digit_char = if base <= 10
+                       0x30 + base - 1
+                     else
+                       0x30 + 9
+                     end
+    max_letter = base > 10 ? 0x61 + (base - 10 - 1) : nil
+
+    valid_digit = lambda do |c|
+      if c >= 0x30 && c <= max_digit_char
+        true
+      elsif max_letter && c >= 0x61 && c <= max_letter
+        true
+      elsif max_letter && c >= 0x41 && c <= (0x41 + (base - 10 - 1))
+        true
+      else
+        false
+      end
+    end
+
+    digit_value = lambda do |c|
+      if c >= 0x30 && c <= 0x39
+        c - 0x30
+      elsif c >= 0x61 && c <= 0x7A
+        c - 0x61 + 10
+      else
+        c - 0x41 + 10
+      end
+    end
+
+    # Must have at least one valid digit immediately.
+    return 0 unless valid_digit.call(bytes[i])
+
+    result = 0
+    prev_was_underscore = false
+    while i < len
+      c = bytes[i]
+      if valid_digit.call(c)
+        result = result * base + digit_value.call(c)
+        prev_was_underscore = false
+        i += 1
+      elsif c == 0x5F # '_'
+        break if prev_was_underscore
+        break if i + 1 >= len
+        break unless valid_digit.call(bytes[i + 1])
+
+        prev_was_underscore = true
+        i += 1
+      else
+        break
+      end
+    end
+
+    sign * result
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-ord
