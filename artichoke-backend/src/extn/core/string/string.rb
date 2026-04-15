@@ -1344,9 +1344,14 @@ class String
     return [] if empty?
     return [dup] if limit == 1
 
-    raise NotImplementedError, 'String#split with block is not supported' unless block.nil?
-
     limit = -1 if limit_not_set
+
+    # When given a block, `split` yields each chunk and returns `self`
+    # instead of an Array, matching CRuby 3.x semantics.
+    unless block.nil?
+      split(pattern, limit).each { |chunk| block.call(chunk) }
+      return self
+    end
 
     if pattern.is_a?(Regexp)
       s = dup
@@ -1407,22 +1412,58 @@ class String
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-squeeze
+  #
+  # Returns a new String with runs of the same character replaced by a
+  # single character. With arguments, only characters in the
+  # intersection of all argument char-sets (same parsing as
+  # `String#count`) are candidates for collapsing. Matches ruby/spec
+  # `core/string/squeeze_spec.rb`.
   def squeeze(*other_str)
     return '' if empty?
-    raise NotImplementedError, 'String#squeeze with arguments is not implemented' unless other_str.empty?
 
-    iter = chars
-    head, *tail = iter
-    runs = [head]
-    last_seen = head
-
-    tail.each do |ch|
-      next if ch == last_seen
-
-      last_seen = ch
-      runs << ch
+    raw = self.bytes
+    if other_str.empty?
+      # No arguments: squeeze every character.
+      out = [raw[0]]
+      i = 1
+      while i < raw.length
+        out << raw[i] unless raw[i] == out[-1]
+        i += 1
+      end
+      return out.pack('C*')
     end
-    runs.join
+
+    # Parse argument char-sets and build the intersection lookup.
+    sets = other_str.map { |a| String.__parse_char_set(a) }
+
+    out = [raw[0]]
+    i = 1
+    while i < raw.length
+      b = raw[i]
+      prev = out[-1]
+      if b == prev
+        # Only suppress the duplicate if the byte is in the
+        # intersection of all char-sets.
+        in_all = true
+        j = 0
+        while j < sets.length
+          negated, lookup = sets[j]
+          present = lookup[b]
+          if negated ? present : !present
+            in_all = false
+            break
+          end
+          j += 1
+        end
+        unless in_all
+          out << b
+        end
+      else
+        out << b
+      end
+      i += 1
+    end
+    out.pack('C*')
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-squeeze-21
@@ -1603,8 +1644,104 @@ class String
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-undump
+  #
+  # Reverses the escaping performed by `String#dump`. The receiver must
+  # be a double-quoted string literal produced by `dump`; otherwise
+  # `RuntimeError` is raised.
+  #
+  # Supported escape sequences:
+  #   \a \b \t \n \v \f \r \e \\ \" \# \xHH \OOO \uHHHH \u{H+}
+  #
+  # Matches ruby/spec `core/string/undump_spec.rb` for the ASCII /
+  # binary case. Full encoding-aware undumping is a follow-up.
   def undump
-    raise NotImplementedError
+    raw = self.b
+    bytes = raw.bytes
+    len = bytes.length
+
+    raise RuntimeError, "not wrapped with '\"' - #{inspect}" unless len >= 2 && bytes[0] == 0x22 && bytes[-1] == 0x22
+
+    out = []
+    i = 1
+    stop = len - 1
+    while i < stop
+      b = bytes[i]
+      if b != 0x5C # not backslash
+        out << b
+        i += 1
+        next
+      end
+
+      # Backslash escape
+      i += 1
+      raise RuntimeError, 'unterminated backslash escape' if i >= stop
+
+      esc = bytes[i]
+      case esc
+      when 0x61 then out << 0x07; i += 1 # \a
+      when 0x62 then out << 0x08; i += 1 # \b
+      when 0x74 then out << 0x09; i += 1 # \t
+      when 0x6E then out << 0x0A; i += 1 # \n
+      when 0x76 then out << 0x0B; i += 1 # \v
+      when 0x66 then out << 0x0C; i += 1 # \f
+      when 0x72 then out << 0x0D; i += 1 # \r
+      when 0x65 then out << 0x1B; i += 1 # \e
+      when 0x5C then out << 0x5C; i += 1 # \\
+      when 0x22 then out << 0x22; i += 1 # \"
+      when 0x23 then out << 0x23; i += 1 # \#
+      when 0x78 # \xHH
+        i += 1
+        hi = __hex_digit(bytes[i]); i += 1
+        lo = __hex_digit(bytes[i]); i += 1
+        out << ((hi << 4) | lo)
+      when 0x75 # \uHHHH or \u{H+}
+        i += 1
+        if bytes[i] == 0x7B # \u{...}
+          i += 1
+          codepoint = 0
+          while bytes[i] != 0x7D
+            codepoint = (codepoint << 4) | __hex_digit(bytes[i])
+            i += 1
+          end
+          i += 1 # skip }
+          out.concat(codepoint.chr(Encoding::UTF_8).bytes)
+        else
+          cp = 0
+          4.times do
+            cp = (cp << 4) | __hex_digit(bytes[i])
+            i += 1
+          end
+          out.concat(cp.chr(Encoding::UTF_8).bytes)
+        end
+      when 0x30..0x37 # \OOO octal
+        oct = esc - 0x30
+        2.times do
+          if i < stop && bytes[i] >= 0x30 && bytes[i] <= 0x37
+            oct = (oct << 3) | (bytes[i] - 0x30)
+            i += 1
+          end
+        end
+        out << oct
+      else
+        # Unknown escape — emit the backslash and the character.
+        out << 0x5C
+        out << esc
+        i += 1
+      end
+    end
+    out.pack('C*').force_encoding(Encoding::UTF_8)
+  end
+
+  def __hex_digit(b)
+    if b >= 0x30 && b <= 0x39
+      b - 0x30
+    elsif b >= 0x41 && b <= 0x46
+      b - 0x41 + 10
+    elsif b >= 0x61 && b <= 0x66
+      b - 0x61 + 10
+    else
+      0
+    end
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-unicode_normalize

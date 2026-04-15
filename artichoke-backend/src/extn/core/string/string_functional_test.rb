@@ -22,6 +22,9 @@ def spec
   test_string_succ
   test_string_sum
   test_string_dump
+  test_string_squeeze_args
+  test_string_split_block
+  test_string_undump
   test_string_eq
 
   test_string_concat
@@ -747,6 +750,83 @@ end
 
 ########################################
 # 11. eq?
+########################################
+# 10j. squeeze with arguments
+########################################
+
+def test_string_squeeze_args
+  # No-arg form (baseline, already worked).
+  raise 'Expected yelow mon' unless 'yellow moon'.squeeze == 'yelow mon'
+
+  # Single char-set argument.
+  raise 'Expected " now is the"' unless '  now   is  the'.squeeze(' ') == ' now is the'
+
+  # Intersection of multiple sets.
+  result = 'woot squeeze cheese'.squeeze('eost', 'queo')
+  raise "Expected 'wot squeze chese', got #{result.inspect}" unless result == 'wot squeze chese'
+
+  # Negated sets.
+  s = '<<subbookkeeper!!!>>'
+  raise 'Expected squeeze("beko","^e") == squeeze("bko")' unless s.squeeze('beko', '^e') == s.squeeze('bko')
+  raise 'Expected squeeze("^<bek!>") == squeeze("o")' unless s.squeeze('^<bek!>') == s.squeeze('o')
+  raise 'Expected squeeze("^") is identity' unless s.squeeze('^') == s
+
+  # Ranges.
+  s2 = '--subbookkeeper--'
+  raise "Expected s.squeeze('bk-o')" unless s2.squeeze('bk-o') == s2.squeeze('bklmno')
+
+  # squeeze! mutates in place.
+  s3 = 'aabbcc'.dup
+  s3.squeeze!('a')
+  raise "Expected 'abbcc', got #{s3.inspect}" unless s3 == 'abbcc'
+end
+
+########################################
+# 10k. split with block
+########################################
+
+def test_string_split_block
+  chunks = []
+  result = 'a,b,c'.split(',') { |c| chunks << c }
+  raise "Expected block split to return self, got #{result.class}" unless result.is_a?(String)
+  raise "Expected chunks == ['a','b','c'], got #{chunks.inspect}" unless chunks == %w[a b c]
+end
+
+########################################
+# 10l. undump
+########################################
+
+def test_string_undump
+  # Simple literal stripping.
+  raise "Expected 'foo', got #{'"foo"'.undump.inspect}" unless '"foo"'.undump == 'foo'
+  raise "Expected '', got #{'""'.undump.inspect}" unless '""'.undump == ''
+
+  # Named escapes.
+  raise 'Expected \\n undump' unless '"\\n"'.undump == "\n"
+  raise 'Expected \\t undump' unless '"\\t"'.undump == "\t"
+  raise 'Expected \\a undump' unless '"\\a"'.undump == "\a"
+
+  # Hex escapes.
+  raise 'Expected \\x00 undump' unless '"\\x00"'.undump == "\x00"
+  raise 'Expected \\x7F undump' unless '"\\x7F"'.undump == "\x7F"
+
+  # Quote and backslash.
+  raise 'Expected \" undump' unless '"\\""'.undump == '"'
+  raise 'Expected \\\\ undump' unless '"\\\\"'.undump == '\\'
+
+  # Hash escaping.
+  raise 'Expected \\# undump' unless '"\\#$PATH"'.undump == '#$PATH'
+
+  # Raises on invalid input.
+  raised = false
+  begin
+    'not_quoted'.undump
+  rescue RuntimeError
+    raised = true
+  end
+  raise 'Expected RuntimeError for unquoted string' unless raised
+end
+
 ########################################
 
 def test_string_eq
