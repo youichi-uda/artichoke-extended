@@ -9,6 +9,64 @@ def spec
     # Warnings are unconditionally printed to `$stderr`.
     time_strftime_empty_warning
   end
+
+  time_initialize
+end
+
+########################################
+# Time.new / Time#initialize
+########################################
+
+def time_initialize
+  # `Time.new` with no arguments is equivalent to `Time.now`.
+  t = Time.new
+  raise "Expected Time instance, got #{t.class}" unless t.is_a?(Time)
+
+  # Year only.
+  t = Time.new(2026)
+  raise "Expected year 2026, got #{t.year}" unless t.year == 2026
+  raise "Expected month 1, got #{t.month}" unless t.month == 1
+  raise "Expected day 1, got #{t.day}" unless t.day == 1
+  raise "Expected hour 0, got #{t.hour}" unless t.hour == 0
+  raise "Expected min 0, got #{t.min}" unless t.min == 0
+  raise "Expected sec 0, got #{t.sec}" unless t.sec == 0
+
+  # Year + month.
+  t = Time.new(2026, 4)
+  raise "Expected month 4, got #{t.month}" unless t.month == 4
+
+  # Year + month + day.
+  t = Time.new(2026, 4, 15)
+  raise "Expected 2026-04-15, got #{t.year}-#{t.month}-#{t.day}" unless t.year == 2026 && t.month == 4 && t.day == 15
+
+  # Year through hour.
+  t = Time.new(2026, 4, 15, 12)
+  raise "Expected hour 12, got #{t.hour}" unless t.hour == 12
+
+  # Year through minute.
+  t = Time.new(2026, 4, 15, 12, 30)
+  raise "Expected 12:30, got #{t.hour}:#{t.min}" unless t.hour == 12 && t.min == 30
+
+  # Year through second.
+  t = Time.new(2026, 4, 15, 12, 30, 45)
+  raise "Expected 12:30:45, got #{t.hour}:#{t.min}:#{t.sec}" unless t.hour == 12 && t.min == 30 && t.sec == 45
+
+  # Invalid component values should raise ArgumentError (not NotImplementedError).
+  raised = false
+  begin
+    Time.new(2026, 13, 1) # invalid month
+  rescue ArgumentError
+    raised = true
+  end
+  raise 'Expected ArgumentError for month 13' unless raised
+
+  raised = false
+  begin
+    Time.new(2026, 1, 32) # invalid day
+  rescue ArgumentError
+    raised = true
+  end
+  raise 'Expected ArgumentError for day 32' unless raised
 end
 
 ##

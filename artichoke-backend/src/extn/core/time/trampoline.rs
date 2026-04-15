@@ -200,10 +200,38 @@ pub fn initialize<T>(interp: &mut Artichoke, time: Value, args: T) -> Result<Val
 where
     T: IntoIterator<Item = Value>,
 {
-    let _ = interp;
-    let _ = time;
-    let _ignored_while_unimplemented = args.into_iter();
-    Err(NotImplementedError::new().into())
+    let mut collected: Vec<Value> = args.into_iter().collect();
+
+    // `Time.new` with zero arguments is equivalent to `Time.now` in Ruby.
+    if collected.is_empty() {
+        let now = Time::now()?;
+        return Time::box_into_value(now, time, interp);
+    }
+
+    // Reuse the `Args` parser from `Time.mktime` / `Time.utc`. It validates
+    // the arity (1..=8, plus the 10-arg historical form) and coerces each
+    // field to the right integer type.
+    //
+    // NOTE: the full Ruby 3.x `Time.new(year, ..., utc_offset)` signature
+    // accepts a trailing String like `"+09:00"` or an `in:` keyword. That
+    // surface is not yet supported — this implementation builds the time in
+    // local time, matching `Time.mktime` semantics, which is sufficient for
+    // the vast majority of callers (`Time.new(2026, 4, 15)`, etc.). The
+    // timezone-offset form will be added in a follow-up along with the
+    // parser plumbing it requires.
+    let parsed_args: Args = interp.try_convert_mut(collected.as_mut_slice())?;
+
+    let built = Time::local(
+        parsed_args.year,
+        parsed_args.month,
+        parsed_args.day,
+        parsed_args.hour,
+        parsed_args.minute,
+        parsed_args.second,
+        parsed_args.nanoseconds,
+    )?;
+
+    Time::box_into_value(built, time, interp)
 }
 
 pub fn initialize_copy(interp: &mut Artichoke, time: Value, mut from: Value) -> Result<Value, Error> {
