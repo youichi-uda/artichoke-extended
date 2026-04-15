@@ -1599,8 +1599,170 @@ pub fn swapcase_bang(interp: &mut Artichoke, mut value: Value) -> Result<Value, 
 }
 
 pub fn to_f(interp: &mut Artichoke, mut value: Value) -> Result<Value, Error> {
-    let _s = unsafe { super::String::unbox_from_value(&mut value, interp)? };
-    Err(NotImplementedError::new().into())
+    let s = unsafe { super::String::unbox_from_value(&mut value, interp)? };
+    let slice = s.as_slice();
+    let parsed = parse_leading_float(slice);
+    Ok(interp.convert_mut(parsed))
+}
+
+/// Parse a leading floating point number from a byte slice, consuming as much
+/// as looks like a valid Ruby float literal. Returns 0.0 on no match, matching
+/// CRuby's `String#to_f` semantics.
+///
+/// Supported forms (matches ruby/spec `core/string/to_f_spec.rb`):
+/// - Leading whitespace is skipped.
+/// - Optional sign (`+` / `-`). A lone sign returns `0.0`.
+/// - Optional integer part (`.5` parses as `0.5`).
+/// - Optional fractional part (`5.` parses as `5.0`).
+/// - Digits may contain underscores between adjacent digits (`1_000.5`, `1_234.890_1`).
+///   A leading underscore (`_9`) or other invalid placement causes the parse to
+///   fail at that position.
+/// - Optional exponent (`e` or `E`, optional sign, optional digits). A trailing
+///   `e` with no digits parses as if the exponent were zero (`"5e".to_f == 5.0`),
+///   following CRuby. This matches ruby/spec.
+/// - `NaN`, `Infinity`, `-Infinity` all return `0.0`.
+/// - Strings containing any leading non-digit (after sign) return `0.0`.
+///
+/// The implementation builds a sanitized ASCII buffer and defers the actual
+/// conversion to `f64::from_str`, which handles `-0.0` correctly so that
+/// `1.0 / "-0".to_f` yields `-Infinity` as ruby/spec requires.
+fn parse_leading_float(bytes: &[u8]) -> f64 {
+    let mut i = 0;
+
+    // Skip leading whitespace.
+    while i < bytes.len() && posix_space::is_space(bytes[i]) {
+        i += 1;
+    }
+
+    // Build a sanitized numeric prefix into a buffer, stripping underscores
+    // that appear strictly between digits. We can't just pass the raw slice to
+    // `f64::from_str` because Ruby tolerates patterns (trailing `.`, trailing
+    // `e` with no digits, leading `.`) that Rust's parser does not.
+    let mut buf: Vec<u8> = Vec::with_capacity(bytes.len().saturating_sub(i));
+
+    // Optional sign.
+    let sign_end = match bytes.get(i) {
+        Some(b'+') => {
+            buf.push(b'+');
+            i += 1;
+            i
+        }
+        Some(b'-') => {
+            buf.push(b'-');
+            i += 1;
+            i
+        }
+        _ => i,
+    };
+
+    // Integer part. Underscores are only valid strictly between digits.
+    let int_digits_start = buf.len();
+    let mut has_integer_digits = false;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if c.is_ascii_digit() {
+            buf.push(c);
+            has_integer_digits = true;
+            i += 1;
+        } else if c == b'_'
+            && has_integer_digits
+            && i + 1 < bytes.len()
+            && bytes[i + 1].is_ascii_digit()
+        {
+            i += 1; // skip the underscore
+        } else {
+            break;
+        }
+    }
+    let has_integer_part = buf.len() > int_digits_start;
+
+    // Fractional part. `.5` and `5.` are both accepted by CRuby.
+    let mut has_fraction_digits = false;
+    if i < bytes.len() && bytes[i] == b'.' {
+        // Peek at the character after the dot. A trailing `.` (no digit after)
+        // is only accepted if we already have an integer part — so that `5.`
+        // parses as `5.0`, but `.` alone or `.x` does not consume the dot.
+        let has_digit_after = bytes.get(i + 1).map_or(false, |c| c.is_ascii_digit());
+        if has_digit_after {
+            buf.push(b'.');
+            i += 1;
+            while i < bytes.len() {
+                let c = bytes[i];
+                if c.is_ascii_digit() {
+                    buf.push(c);
+                    has_fraction_digits = true;
+                    i += 1;
+                } else if c == b'_'
+                    && has_fraction_digits
+                    && i + 1 < bytes.len()
+                    && bytes[i + 1].is_ascii_digit()
+                {
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+        } else if has_integer_part {
+            // `5.` — represent as `5.0` for `f64::from_str` by emitting the
+            // dot and a zero. We don't advance `i` past the dot because the
+            // unused tail is ignored anyway.
+            buf.push(b'.');
+            buf.push(b'0');
+        }
+    }
+
+    // We need at least one numeric digit (integer or fractional) for a valid
+    // float. A lone sign, empty string, or leading non-digit all yield 0.0.
+    if !has_integer_part && !has_fraction_digits {
+        let _ = sign_end;
+        return 0.0;
+    }
+
+    // Exponent. CRuby accepts a bare `e`/`E` (e.g. `"5e".to_f == 5.0`) — in
+    // that case we simply ignore the exponent.
+    if i < bytes.len() && (bytes[i] == b'e' || bytes[i] == b'E') {
+        let save_buf_len = buf.len();
+        buf.push(b'e');
+        i += 1;
+        match bytes.get(i) {
+            Some(&c @ b'+') | Some(&c @ b'-') => {
+                buf.push(c);
+                i += 1;
+            }
+            _ => {}
+        }
+        let exp_digits_start = buf.len();
+        let mut has_exp_digits = false;
+        while i < bytes.len() {
+            let c = bytes[i];
+            if c.is_ascii_digit() {
+                buf.push(c);
+                has_exp_digits = true;
+                i += 1;
+            } else if c == b'_'
+                && has_exp_digits
+                && i + 1 < bytes.len()
+                && bytes[i + 1].is_ascii_digit()
+            {
+                i += 1; // skip underscore between exponent digits
+            } else {
+                break;
+            }
+        }
+        if buf.len() == exp_digits_start {
+            // No exponent digits. Ruby treats this as "ignore the exponent",
+            // so we drop the `e` and any sign we optimistically appended.
+            buf.truncate(save_buf_len);
+        }
+    }
+
+    // The buffer contains only ASCII sign, digits, `.`, and `e` — safe to
+    // view as UTF-8 for `f64::from_str`.
+    let s = match str::from_utf8(&buf) {
+        Ok(s) => s,
+        Err(_) => return 0.0,
+    };
+    s.parse::<f64>().unwrap_or(0.0)
 }
 
 pub fn to_i(interp: &mut Artichoke, mut value: Value, base: Option<Value>) -> Result<Value, Error> {

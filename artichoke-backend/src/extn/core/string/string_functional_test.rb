@@ -14,6 +14,7 @@ def spec
   test_string_tr
   test_string_end_with
   test_string_to_i
+  test_string_to_f
   test_string_eq
 
   test_string_concat
@@ -347,6 +348,72 @@ def test_string_to_i
   return if part == 1
 
   raise "Expected '1__23'.to_i => 1, got #{part.inspect}"
+end
+
+########################################
+# 10b. to_f
+########################################
+
+def test_string_to_f
+  # Track ruby/spec `spec/core/string/to_f_spec.rb` exactly.
+
+  # Treats leading characters as a floating point number.
+  raise "Expected 1234.5, got #{'123.45e1'.to_f.inspect}" unless '123.45e1'.to_f == 1234.5
+  raise "Expected 45.67, got #{'45.67 degrees'.to_f.inspect}" unless '45.67 degrees'.to_f == 45.67
+  raise "Expected 0.0, got #{'0'.to_f.inspect}" unless '0'.to_f == 0.0
+
+  # Leading dot and trailing dot forms.
+  raise "Expected 0.5, got #{'.5'.to_f.inspect}" unless '.5'.to_f == 0.5
+  raise "Expected 5.0, got #{'.5e1'.to_f.inspect}" unless '.5e1'.to_f == 5.0
+  raise "Expected 5.0, got #{'5.'.to_f.inspect}" unless '5.'.to_f == 5.0
+  raise "Expected 5.0, got #{'5e'.to_f.inspect}" unless '5e'.to_f == 5.0
+  raise "Expected 5.0, got #{'5E'.to_f.inspect}" unless '5E'.to_f == 5.0
+
+  # Special float value strings return 0.
+  raise "Expected 0, got #{'NaN'.to_f.inspect}" unless 'NaN'.to_f == 0
+  raise "Expected 0, got #{'Infinity'.to_f.inspect}" unless 'Infinity'.to_f == 0
+  raise "Expected 0, got #{'-Infinity'.to_f.inspect}" unless '-Infinity'.to_f == 0
+
+  # Varying case in exponent letter.
+  raise "Expected 1234.5, got #{'123.45e1'.to_f.inspect}" unless '123.45e1'.to_f == 1234.5
+  raise "Expected 1234.5, got #{'123.45E1'.to_f.inspect}" unless '123.45E1'.to_f == 1234.5
+
+  # Varying signs on mantissa and exponent.
+  raise "Expected #{+123.45e1}, got #{'+123.45e1'.to_f.inspect}" unless '+123.45e1'.to_f == +123.45e1
+  raise "Expected #{-123.45e1}, got #{'-123.45e1'.to_f.inspect}" unless '-123.45e1'.to_f == -123.45e1
+  raise "Expected #{123.45e+1}, got #{'123.45e+1'.to_f.inspect}" unless '123.45e+1'.to_f == 123.45e+1
+  raise "Expected #{123.45e-1}, got #{'123.45e-1'.to_f.inspect}" unless '123.45e-1'.to_f == 123.45e-1
+  raise "Expected #{-123.45e+1}, got #{'-123.45e+1'.to_f.inspect}" unless '-123.45e+1'.to_f == -123.45e+1
+  raise "Expected #{-123.45e-1}, got #{'-123.45e-1'.to_f.inspect}" unless '-123.45e-1'.to_f == -123.45e-1
+
+  # Underscores are allowed between digits on either side of the decimal point.
+  raise "Expected #{1_234_567.890_1}, got #{'1_234_567.890_1'.to_f.inspect}" unless '1_234_567.890_1'.to_f == 1_234_567.890_1
+
+  # Strings with any non-digit immediately after the sign return 0.
+  raise "Expected 0, got #{'blah'.to_f.inspect}" unless 'blah'.to_f == 0
+  raise "Expected 0, got #{'0b5'.to_f.inspect}" unless '0b5'.to_f == 0 || '0b5'.to_f == 0.0
+  # `0b5` after `0` is invalid; CRuby returns 0.0. We accept either strict
+  # interpretation because the spec lists it with the other invalid-prefix cases.
+
+  # Leading underscore is never valid.
+  raise "Expected 0, got #{'_9'.to_f.inspect}" unless '_9'.to_f == 0
+
+  # Optional sign behavior.
+  raise "Expected -45.67, got #{'-45.67 degrees'.to_f.inspect}" unless '-45.67 degrees'.to_f == -45.67
+  raise "Expected 45.67, got #{'+45.67 degrees'.to_f.inspect}" unless '+45.67 degrees'.to_f == 45.67
+  raise "Expected #{-55e-50}, got #{'-5_5e-5_0'.to_f.inspect}" unless '-5_5e-5_0'.to_f == -55e-50
+  raise "Expected 0.0, got #{'-'.to_f.inspect}" unless '-'.to_f == 0.0
+
+  # Negative zero should propagate the sign bit so 1.0 / -0.0 == -Infinity.
+  neg_zero = '-0'.to_f
+  div = 1.0 / neg_zero
+  unless div.to_s == '-Infinity'
+    raise "Expected 1.0 / '-0'.to_f to be -Infinity, got #{div.inspect}"
+  end
+
+  # Failed conversions return 0.0.
+  raise "Expected 0.0, got #{'bad'.to_f.inspect}" unless 'bad'.to_f == 0.0
+  raise "Expected 0.0, got #{'thx1138'.to_f.inspect}" unless 'thx1138'.to_f == 0.0
 end
 
 ########################################
