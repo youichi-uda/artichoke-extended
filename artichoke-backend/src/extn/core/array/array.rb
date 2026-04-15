@@ -854,83 +854,129 @@ class Array
   # Returns the maximum element. With a block, the block is used as a
   # comparator between each subsequent element and the running maximum.
   #
-  # For empty arrays, returns `nil`. For single-element arrays, returns the
-  # element. Behaviour matches ruby/spec `core/array/max_spec.rb`.
+  # With an integer `n`, returns the top `n` elements of the array
+  # sorted in descending order, clamped to the receiver's length.
   #
-  # The optional `n` argument (`max(2)`) is not yet supported and raises
-  # `NotImplementedError`, matching the previous behaviour for that overload.
+  # For empty arrays, `max` returns `nil` and `max(n)` returns `[]`.
+  # For single-element arrays, `max` returns the element. Behaviour
+  # matches ruby/spec `core/array/max_spec.rb`.
   def max(n = nil, &block)
-    raise NotImplementedError, 'Array#max(n) is not yet implemented' unless n.nil?
+    if n.nil?
+      len = length
+      return nil if len.zero?
 
-    len = length
-    return nil if len.zero?
+      result = self[0]
+      idx = 1
+      if block
+        while idx < len
+          el = self[idx]
+          cmp = block.call(el, result)
+          raise ArgumentError, 'comparison of elements failed' if cmp.nil?
+          raise ArgumentError, 'comparison of elements failed' unless cmp.is_a?(Integer)
 
-    result = self[0]
-    idx = 1
-    if block
-      while idx < len
-        el = self[idx]
-        cmp = block.call(el, result)
-        raise ArgumentError, 'comparison of elements failed' if cmp.nil?
-        unless cmp.is_a?(Integer)
-          raise ArgumentError, 'comparison of elements failed'
+          result = el if cmp > 0
+          idx += 1
         end
+      else
+        while idx < len
+          el = self[idx]
+          cmp = el <=> result
+          raise ArgumentError, "comparison of #{el.class} with #{result.class} failed" if cmp.nil?
 
-        result = el if cmp > 0
-        idx += 1
+          result = el if cmp > 0
+          idx += 1
+        end
       end
-    else
-      while idx < len
-        el = self[idx]
-        cmp = el <=> result
-        raise ArgumentError, "comparison of #{el.class} with #{result.class} failed" if cmp.nil?
-
-        result = el if cmp > 0
-        idx += 1
-      end
+      return result
     end
-    result
+
+    __top_n(n, :max, &block)
   end
 
   # Returns the minimum element. With a block, the block is used as a
   # comparator between each subsequent element and the running minimum.
   #
-  # For empty arrays, returns `nil`. For single-element arrays, returns the
-  # element. Behaviour matches ruby/spec `core/array/min_spec.rb`.
+  # With an integer `n`, returns the bottom `n` elements of the array
+  # sorted in ascending order, clamped to the receiver's length.
   #
-  # The optional `n` argument (`min(2)`) is not yet supported and raises
-  # `NotImplementedError`, matching the previous behaviour for that overload.
+  # For empty arrays, `min` returns `nil` and `min(n)` returns `[]`.
+  # For single-element arrays, `min` returns the element. Behaviour
+  # matches ruby/spec `core/array/min_spec.rb`.
   def min(n = nil, &block)
-    raise NotImplementedError, 'Array#min(n) is not yet implemented' unless n.nil?
+    if n.nil?
+      len = length
+      return nil if len.zero?
 
-    len = length
-    return nil if len.zero?
+      result = self[0]
+      idx = 1
+      if block
+        while idx < len
+          el = self[idx]
+          cmp = block.call(el, result)
+          raise ArgumentError, 'comparison of elements failed' if cmp.nil?
+          raise ArgumentError, 'comparison of elements failed' unless cmp.is_a?(Integer)
 
-    result = self[0]
-    idx = 1
-    if block
-      while idx < len
-        el = self[idx]
-        cmp = block.call(el, result)
-        raise ArgumentError, 'comparison of elements failed' if cmp.nil?
-        unless cmp.is_a?(Integer)
-          raise ArgumentError, 'comparison of elements failed'
+          result = el if cmp < 0
+          idx += 1
         end
+      else
+        while idx < len
+          el = self[idx]
+          cmp = el <=> result
+          raise ArgumentError, "comparison of #{el.class} with #{result.class} failed" if cmp.nil?
 
-        result = el if cmp < 0
-        idx += 1
+          result = el if cmp < 0
+          idx += 1
+        end
       end
-    else
-      while idx < len
-        el = self[idx]
-        cmp = el <=> result
-        raise ArgumentError, "comparison of #{el.class} with #{result.class} failed" if cmp.nil?
-
-        result = el if cmp < 0
-        idx += 1
-      end
+      return result
     end
-    result
+
+    __top_n(n, :min, &block)
+  end
+
+  # Internal helper shared by `Array#max(n)` and `Array#min(n)`.
+  #
+  # Coerces `n` through `#to_int`, rejects negative counts with
+  # `ArgumentError` ("negative size ..."), clamps to `length`, and
+  # returns the top / bottom `n` elements — sorted descending for
+  # `:max`, ascending for `:min` — matching CRuby's behaviour.
+  def __top_n(n, direction, &block)
+    count =
+      if n.is_a?(Integer)
+        n
+      elsif n.respond_to?(:to_int)
+        converted = n.to_int
+        unless converted.is_a?(Integer)
+          raise TypeError,
+                "can't convert #{n.class} to Integer (#{n.class}#to_int gives #{converted.class})"
+        end
+        converted
+      else
+        raise TypeError, "no implicit conversion of #{n.class} into Integer"
+      end
+
+    raise ArgumentError, 'negative size (-1)' if count.negative?
+    return [] if count.zero? || empty?
+
+    sorted =
+      if block
+        sort(&block)
+      else
+        sort
+      end
+
+    if direction == :max
+      # Top `count` elements in descending order. `sort` put the
+      # smallest first, so slice the tail and reverse.
+      tail = sorted.length - count
+      tail = 0 if tail.negative?
+      sorted[tail..-1].reverse
+    else
+      # Bottom `count` elements in ascending order — the sorted
+      # prefix, which `sort` already produced for us.
+      sorted[0, count]
+    end
   end
 
   def none?(pattern = (not_set = true), &block)

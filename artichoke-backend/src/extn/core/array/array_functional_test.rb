@@ -494,6 +494,28 @@ def max
 
   # Homogeneous nested arrays (Array#<=> is lexicographic).
   raise "Expected [[6,7,8,9]]" unless [[1, 2], [3, 4, 5], [6, 7, 8, 9]].max == [6, 7, 8, 9]
+
+  # max(n): top N in descending order.
+  raise "Expected [], got #{[].max(5).inspect}" unless [].max(5) == []
+  raise "Expected [], got #{[1, 2, 3].max(0).inspect}" unless [1, 2, 3].max(0) == []
+  raise "Expected [3], got #{[1, 2, 3].max(1).inspect}" unless [1, 2, 3].max(1) == [3]
+  raise "Expected [3,2], got #{[1, 2, 3].max(2).inspect}" unless [1, 2, 3].max(2) == [3, 2]
+  raise "Expected [3,2,1], got #{[1, 2, 3].max(3).inspect}" unless [1, 2, 3].max(3) == [3, 2, 1]
+  # Over-count clamps to length.
+  raise "Expected [3,2,1], got #{[1, 2, 3].max(10).inspect}" unless [1, 2, 3].max(10) == [3, 2, 1]
+
+  # With a block comparator.
+  result = [5, 1, 4, 2, 3].max(3) { |a, b| a <=> b }
+  raise "Expected [5,4,3], got #{result.inspect}" unless result == [5, 4, 3]
+
+  # Negative n raises ArgumentError.
+  raised = false
+  begin
+    [1, 2].max(-1)
+  rescue ArgumentError
+    raised = true
+  end
+  raise 'Expected ArgumentError for max(-1)' unless raised
 end
 
 ########################################
@@ -527,6 +549,28 @@ def min
   yielded = []
   [1, 2, 3, 4, 5].min { |el, _cur| yielded << el; -el }
   raise "Expected yielded [2,3,4,5], got #{yielded.inspect}" unless yielded == [2, 3, 4, 5]
+
+  # min(n): bottom N in ascending order.
+  raise "Expected [], got #{[].min(5).inspect}" unless [].min(5) == []
+  raise "Expected [], got #{[1, 2, 3].min(0).inspect}" unless [1, 2, 3].min(0) == []
+  raise "Expected [1], got #{[1, 2, 3].min(1).inspect}" unless [1, 2, 3].min(1) == [1]
+  raise "Expected [1,2], got #{[3, 1, 2].min(2).inspect}" unless [3, 1, 2].min(2) == [1, 2]
+  raise "Expected [1,2,3], got #{[3, 1, 2].min(3).inspect}" unless [3, 1, 2].min(3) == [1, 2, 3]
+  # Over-count clamps to length.
+  raise "Expected [1,2,3], got #{[3, 1, 2].min(10).inspect}" unless [3, 1, 2].min(10) == [1, 2, 3]
+
+  # With a block comparator.
+  result = [5, 1, 4, 2, 3].min(2) { |a, b| a <=> b }
+  raise "Expected [1,2], got #{result.inspect}" unless result == [1, 2]
+
+  # Negative n raises ArgumentError.
+  raised = false
+  begin
+    [1, 2].min(-1)
+  rescue ArgumentError
+    raised = true
+  end
+  raise 'Expected ArgumentError for min(-1)' unless raised
 end
 
 ########################################
