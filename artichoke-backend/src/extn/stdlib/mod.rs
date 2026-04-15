@@ -1,5 +1,8 @@
 use crate::extn::prelude::*;
 
+pub(in crate::extn) mod date;
+pub(in crate::extn) mod file;
+pub(in crate::extn) mod net_http;
 #[cfg(feature = "stdlib-abbrev")]
 pub(in crate::extn) mod abbrev;
 #[cfg(feature = "stdlib-base64")]
@@ -31,6 +34,9 @@ pub(in crate::extn) mod uri;
 
 #[allow(unused_variables)]
 pub fn init(interp: &mut Artichoke) -> InitializeResult<()> {
+    date::init(interp)?;
+    file::init(interp)?;
+    net_http::init(interp)?;
     #[cfg(feature = "stdlib-abbrev")]
     abbrev::init(interp)?;
     #[cfg(feature = "stdlib-base64")]
