@@ -189,7 +189,17 @@ class String
     if args.length == 3
       idx, len, val = args
       if idx.is_a?(Regexp)
-        raise NotImplementedError, "Regexp indexing not supported"
+        md = idx.match(self)
+        raise IndexError, "regexp not matched" if md.nil?
+        group = len.to_i
+        matched = md[group]
+        raise IndexError, "index #{group} out of regexp" if matched.nil?
+        pos = self.index(matched)
+        before = pos > 0 ? self[0, pos] : ''
+        after_start = pos + matched.length
+        after = after_start < length ? self[after_start, length - after_start] : ''
+        replace(before + val.to_s + after)
+        return val
       end
       idx = idx.to_i
       idx += length if idx < 0
@@ -232,7 +242,14 @@ class String
         after = after_start < length ? self[after_start, length - after_start] : ''
         replace(before + val.to_s + after)
       when Regexp
-        raise NotImplementedError, "Regexp indexing not supported"
+        md = idx.match(self)
+        raise IndexError, "regexp not matched" if md.nil?
+        matched = md[0]
+        pos = self.index(matched)
+        before = pos > 0 ? self[0, pos] : ''
+        after_start = pos + matched.length
+        after = after_start < length ? self[after_start, length - after_start] : ''
+        replace(before + val.to_s + after)
       else
         self[idx.to_i] = val
       end
@@ -269,6 +286,66 @@ class String
   # NOTE: Implemented in native code.
   #
   # def bytesize(integer, *args); end
+
+  # https://ruby-doc.org/core-3.0.2/String.html#method-i-byteindex
+  #
+  # The native trampoline handles String patterns but raises
+  # NotImplementedError for Regexp. This override catches Regexp and
+  # delegates to `Regexp#match`; for String it falls back to a byte scan.
+  def byteindex(pattern, offset = 0)
+    if pattern.is_a?(Regexp)
+      md = pattern.match(self, offset)
+      return nil if md.nil?
+
+      md.begin(0)
+    else
+      pattern = pattern.to_s unless pattern.is_a?(String)
+      haystack = self.b
+      needle = pattern.b
+      offset += haystack.bytesize if offset.negative?
+      return nil if offset.negative? || offset > haystack.bytesize
+
+      pos = haystack.bytes[offset..-1].each_cons(needle.bytesize).find_index { |window| window == needle.bytes }
+      pos.nil? ? nil : pos + offset
+    end
+  end
+
+  # https://ruby-doc.org/core-3.0.2/String.html#method-i-byterindex
+  #
+  # Same Regexp override approach as `byteindex`.
+  def byterindex(pattern, offset = (offset_not_set = true))
+    max_pos = offset_not_set ? bytesize : offset
+    max_pos += bytesize if max_pos.negative?
+    return nil if max_pos.negative?
+
+    if pattern.is_a?(Regexp)
+      last_pos = nil
+      pos = 0
+      while pos <= max_pos
+        md = pattern.match(self, pos)
+        break if md.nil?
+
+        start = md.begin(0)
+        break if start > max_pos
+
+        last_pos = start
+        pos = start + 1
+      end
+      return last_pos
+    end
+
+    pattern = pattern.to_s unless pattern.is_a?(String)
+    needle = pattern.b.bytes
+    haystack = self.b.bytes
+    nlen = needle.length
+    i = [max_pos, haystack.length - nlen].min
+    while i >= 0
+      return i if haystack[i, nlen] == needle
+
+      i -= 1
+    end
+    nil
+  end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-capitalize
   #
@@ -878,9 +955,43 @@ class String
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-index
   #
-  # NOTE: Implemented in native code.
-  #
-  # def index(*args); end
+  # The native trampoline handles String patterns but raises
+  # NotImplementedError for Regexp. This Ruby override catches the
+  # Regexp case and delegates to Regexp#match; String patterns fall
+  # through to the native implementation via `super`-like dispatch
+  # (we call the underlying byte search directly).
+  def index(pattern, offset = 0)
+    if pattern.is_a?(Regexp)
+      md = pattern.match(self, offset)
+      return nil if md.nil?
+
+      return md.begin(0)
+    end
+
+    # For String patterns, use the scan-based approach since the
+    # native trampoline raises NIE for Regexp but works for String.
+    # We replicate the String search in Ruby to avoid the native
+    # trampoline entirely (it's registered with broken arg handling).
+    pattern = pattern.to_s unless pattern.is_a?(String)
+    offset += length if offset.negative?
+    return nil if offset.negative? || offset > length
+
+    haystack = self[offset..-1]
+    return nil if haystack.nil?
+
+    pos = nil
+    i = 0
+    plen = pattern.length
+    hlen = haystack.length
+    while i <= hlen - plen
+      if haystack[i, plen] == pattern
+        pos = i
+        break
+      end
+      i += 1
+    end
+    pos.nil? ? nil : pos + offset
+  end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-initialize_copy
   #
@@ -1243,9 +1354,40 @@ class String
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-rindex
   #
-  # NOTE: Implemented in native code.
-  #
-  # def rindex(*args); end
+  # Ruby override that handles Regexp patterns (the native trampoline
+  # raises NotImplementedError for Regexp). String patterns are
+  # handled with a right-to-left byte scan.
+  def rindex(pattern, offset = (offset_not_set = true))
+    max_pos = offset_not_set ? length : offset
+    max_pos += length if max_pos.negative?
+    return nil if max_pos.negative?
+
+    if pattern.is_a?(Regexp)
+      last_pos = nil
+      pos = 0
+      while pos <= max_pos
+        md = pattern.match(self, pos)
+        break if md.nil?
+
+        start = md.begin(0)
+        break if start > max_pos
+
+        last_pos = start
+        pos = start + 1
+      end
+      return last_pos
+    end
+
+    pattern = pattern.to_s unless pattern.is_a?(String)
+    plen = pattern.length
+    i = [max_pos, length - plen].min
+    while i >= 0
+      return i if self[i, plen] == pattern
+
+      i -= 1
+    end
+    nil
+  end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-rjust
   def rjust(integer, padstr = ' ')
