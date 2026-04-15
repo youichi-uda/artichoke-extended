@@ -18,6 +18,7 @@ def spec
   test_string_hex
   test_string_oct
   test_string_count
+  test_string_rpartition
   test_string_eq
 
   test_string_concat
@@ -570,6 +571,52 @@ def test_string_count
   raise 'Expected dash literal' unless s3.count('-') == 2
   raise 'Expected e+dash' unless s3.count('e-') == s3.count('e') + s3.count('-')
   raise 'Expected dash+h' unless s3.count('-h') == s3.count('h') + s3.count('-')
+end
+
+########################################
+# 10f. rpartition
+########################################
+
+def test_string_rpartition
+  # Basic string pattern splitting on the LAST occurrence.
+  result = 'hello world'.rpartition('o')
+  expected = ['hello w', 'o', 'rld']
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # No match returns ['', '', self].
+  result = 'hello'.rpartition('x')
+  raise "Expected ['', '', 'hello'], got #{result.inspect}" unless result == ['', '', 'hello']
+
+  # Whole-string match.
+  result = 'hello'.rpartition('hello')
+  raise "Expected ['', 'hello', ''], got #{result.inspect}" unless result == ['', 'hello', '']
+
+  # Regexp pattern picks up the last match.
+  result = 'hello!'.rpartition(/l./)
+  expected = ['hel', 'lo', '!']
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # Non-String / non-Regexp / non-#to_str argument raises TypeError.
+  raised = false
+  begin
+    'hello'.rpartition(5)
+  rescue TypeError
+    raised = true
+  end
+  raise 'Expected TypeError for Integer pattern' unless raised
+
+  raised = false
+  begin
+    'hello'.rpartition(nil)
+  rescue TypeError
+    raised = true
+  end
+  raise 'Expected TypeError for nil pattern' unless raised
+
+  # Multiple occurrences — confirm we pick the LAST one, not the first.
+  result = 'ababab'.rpartition('a')
+  expected = ['abab', 'a', 'b']
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
 end
 
 ########################################

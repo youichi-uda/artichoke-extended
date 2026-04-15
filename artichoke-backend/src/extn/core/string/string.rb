@@ -1039,11 +1039,61 @@ class String
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-rpartition
+  #
+  # Searches the receiver for the last occurrence of `pattern` and returns a
+  # three-element array `[head, match, tail]`. If the pattern is not found,
+  # returns `["", "", self]` (note the order: the unmatched string lands in
+  # the tail position, unlike `partition`, where it lands in the head).
+  #
+  # Matches ruby/spec `core/string/rpartition_spec.rb`.
   def rpartition(pattern)
-    pattern = Regexp.compile(Regexp.escape(pattern)) if pattern.is_a?(String)
+    # Duck-type a non-String/Regexp into a String via `#to_str`, matching
+    # CRuby's conversion semantics (and the spec's `mock(:to_str)` test).
+    if !pattern.is_a?(String) && !pattern.is_a?(Regexp)
+      raise TypeError, "no implicit conversion of #{pattern.class} into String" unless pattern.respond_to?(:to_str)
 
-    _ = pattern
-    raise NotImplementedError
+      pattern = pattern.to_str
+      raise TypeError, "no implicit conversion of #{pattern.class} into String" unless pattern.is_a?(String)
+    end
+
+    if pattern.is_a?(Regexp)
+      # `rpartition` picks the match with the LATEST starting offset, which
+      # may overlap with an earlier match. `"hello!".rpartition(/l./)` must
+      # return the match starting at index 3 ("lo"), not the earlier match
+      # starting at index 2 ("ll"). So we step by a single character when
+      # scanning, and keep the match with the highest start index.
+      last_match = nil
+      last_start = -1
+      offset = 0
+      len = length
+      while offset <= len
+        md = pattern.match(self, offset)
+        break if md.nil?
+
+        start = md.pre_match.length
+        if start >= last_start
+          last_match = md
+          last_start = start
+        end
+        offset = start + 1
+      end
+      if last_match.nil?
+        return ['', '', dup]
+      end
+
+      matched = last_match[0]
+      head = self[0, last_start] || ''
+      tail = self[(last_start + matched.length)..-1] || ''
+      return [head, matched, tail]
+    end
+
+    # String pattern: find the last index and split there.
+    idx = rindex(pattern)
+    return ['', '', dup] if idx.nil?
+
+    head = self[0, idx] || ''
+    tail = self[(idx + pattern.length)..-1] || ''
+    [head, pattern.dup, tail]
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-rstrip
