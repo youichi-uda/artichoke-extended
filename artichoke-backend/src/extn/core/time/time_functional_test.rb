@@ -15,6 +15,8 @@ def spec
   time_utc_offset
   time_timezone
   time_to_a
+  time_localtime_getlocal
+  time_round
 end
 
 ########################################
@@ -144,6 +146,53 @@ def time_to_a
   raise 'Expected isdst to be Boolean' unless arr[8].equal?(true) || arr[8].equal?(false)
 
   raise "Expected zone to be 'UTC', got #{arr[9].inspect}" unless arr[9] == 'UTC'
+end
+
+########################################
+# Time#localtime / Time#getlocal
+########################################
+
+def time_localtime_getlocal
+  # Create a UTC time, then get a local copy. The instant should be
+  # the same (to_i), but is_utc should differ (unless the host tz IS
+  # UTC).
+  t = Time.utc(2026, 4, 16, 12, 0, 0)
+  raise 'Expected UTC time to be utc?' unless t.utc?
+
+  local = t.getlocal
+  raise "Expected same instant, got utc=#{t.to_i}, local=#{local.to_i}" unless t.to_i == local.to_i
+  raise 'Expected getlocal to be a new object' if local.equal?(t)
+
+  # `localtime` mutates in place and returns self.
+  t2 = Time.utc(2026, 4, 16, 12, 0, 0)
+  result = t2.localtime
+  raise 'Expected localtime to return self' unless result.equal?(t2)
+  raise "Expected same instant after localtime, got #{t2.to_i}" unless t2.to_i == local.to_i
+end
+
+########################################
+# Time#round
+########################################
+
+def time_round
+  # Time.utc has 0 subseconds, so round is a no-op.
+  t = Time.utc(2026, 4, 16, 12, 30, 45)
+  r = t.round
+  raise "Expected sec 45, got #{r.sec}" unless r.sec == 45
+  raise 'Expected round to return a new object' if r.equal?(t)
+
+  # Round to 0 digits (default) should keep the second intact for
+  # whole-second times.
+  raise "Expected same instant, got #{t.to_i} vs #{r.to_i}" unless t.to_i == r.to_i
+
+  # Negative ndigits raises ArgumentError.
+  raised = false
+  begin
+    t.round(-1)
+  rescue ArgumentError
+    raised = true
+  end
+  raise 'Expected ArgumentError for negative ndigits' unless raised
 end
 
 ##

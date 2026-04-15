@@ -265,11 +265,16 @@ pub fn initialize_copy(interp: &mut Artichoke, time: Value, mut from: Value) -> 
 
 // Mutators and converters
 
-pub fn mutate_to_local(interp: &mut Artichoke, time: Value, offset: Option<Value>) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    let _ = offset;
-    Err(NotImplementedError::new().into())
+pub fn mutate_to_local(interp: &mut Artichoke, mut time: Value, offset: Option<Value>) -> Result<Value, Error> {
+    // `Time#localtime` — converts `self` to local time in place.
+    // The optional offset ("+09:00", integer seconds, etc.) is not yet
+    // supported. Without an argument, converts to the system local tz.
+    if offset.is_some() {
+        return Err(NotImplementedError::from("Time#localtime with explicit utc_offset").into());
+    }
+    let mut t = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    t.set_local()?;
+    Ok(time)
 }
 
 pub fn mutate_to_utc(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
@@ -278,11 +283,16 @@ pub fn mutate_to_utc(interp: &mut Artichoke, mut time: Value) -> Result<Value, E
     Ok(time)
 }
 
-pub fn as_local(interp: &mut Artichoke, time: Value, offset: Option<Value>) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    let _ = offset;
-    Err(NotImplementedError::new().into())
+pub fn as_local(interp: &mut Artichoke, mut time: Value, offset: Option<Value>) -> Result<Value, Error> {
+    // `Time#getlocal` — returns a new Time converted to local time,
+    // leaving the receiver untouched. The optional offset argument is
+    // not yet supported.
+    if offset.is_some() {
+        return Err(NotImplementedError::from("Time#getlocal with explicit utc_offset").into());
+    }
+    let t = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    let local = t.to_local()?;
+    Time::alloc_value(local, interp)
 }
 
 pub fn as_utc(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
@@ -385,11 +395,24 @@ pub fn succ(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
     plus(interp, time, interp.convert(1))
 }
 
-pub fn round(interp: &mut Artichoke, time: Value, num_digits: Option<Value>) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    let _ = num_digits;
-    Err(NotImplementedError::new().into())
+pub fn round(interp: &mut Artichoke, mut time: Value, num_digits: Option<Value>) -> Result<Value, Error> {
+    // `Time#round(ndigits = 0)` — rounds subsecond precision to the
+    // specified number of decimal digits. `ndigits == 0` rounds to the
+    // nearest second. The `spinoso-time` crate already provides the
+    // heavy lifting; we just coerce the Ruby argument to a `u32`.
+    let ndigits: u32 = match num_digits {
+        None => 0,
+        Some(v) => {
+            let n = implicitly_convert_to_int(interp, v)?;
+            if n < 0 {
+                return Err(ArgumentError::from(format!("negative ndigits given: {n}")).into());
+            }
+            n as u32
+        }
+    };
+    let t = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    let rounded = t.round(ndigits);
+    Time::alloc_value(rounded, interp)
 }
 
 // Datetime
