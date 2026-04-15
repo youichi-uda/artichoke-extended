@@ -19,6 +19,7 @@ def spec
   test_string_oct
   test_string_count
   test_string_rpartition
+  test_string_succ
   test_string_eq
 
   test_string_concat
@@ -617,6 +618,67 @@ def test_string_rpartition
   result = 'ababab'.rpartition('a')
   expected = ['abab', 'a', 'b']
   raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+end
+
+########################################
+# 10g. succ / next
+########################################
+
+def test_string_succ
+  # Empty string stays empty.
+  raise "Expected '', got #{''.succ.inspect}" unless ''.succ == ''
+
+  # Simple right-increment within the same class.
+  raise "Expected 'abce', got #{'abcd'.succ.inspect}" unless 'abcd'.succ == 'abce'
+  raise "Expected 'THX1139', got #{'THX1138'.succ.inspect}" unless 'THX1138'.succ == 'THX1139'
+
+  # Non-alphanumeric borders don't interfere when no carry is needed.
+  raise "Expected '<<koalb>>', got #{'<<koala>>'.succ.inspect}" unless '<<koala>>'.succ == '<<koalb>>'
+  raise "Expected '==B??', got #{'==A??'.succ.inspect}" unless '==A??'.succ == '==B??'
+
+  # Carry within the same class cascades left.
+  raise "Expected 'ea', got #{'dz'.succ.inspect}" unless 'dz'.succ == 'ea'
+  raise "Expected 'IA', got #{'HZ'.succ.inspect}" unless 'HZ'.succ == 'IA'
+  raise "Expected '50', got #{'49'.succ.inspect}" unless '49'.succ == '50'
+
+  raise "Expected 'jaa', got #{'izz'.succ.inspect}" unless 'izz'.succ == 'jaa'
+  raise "Expected 'JAA', got #{'IZZ'.succ.inspect}" unless 'IZZ'.succ == 'JAA'
+  raise "Expected '700', got #{'699'.succ.inspect}" unless '699'.succ == '700'
+
+  # Carry walks through mixed classes.
+  raise "Expected '7A00a00A', got #{'6Z99z99Z'.succ.inspect}" unless '6Z99z99Z'.succ == '7A00a00A'
+  raise "Expected '2000aaa', got #{'1999zzz'.succ.inspect}" unless '1999zzz'.succ == '2000aaa'
+
+  # Carry skips non-alphanumerics.
+  raise "Expected 'OA/[]AAA0000', got #{'NZ/[]ZZZ9999'.succ.inspect}" unless 'NZ/[]ZZZ9999'.succ == 'OA/[]AAA0000'
+
+  # Carry past the leftmost alphanumeric prepends a fresh digit/letter.
+  raise "Expected 'aa', got #{'z'.succ.inspect}" unless 'z'.succ == 'aa'
+  raise "Expected 'AA', got #{'Z'.succ.inspect}" unless 'Z'.succ == 'AA'
+  raise "Expected '10', got #{'9'.succ.inspect}" unless '9'.succ == '10'
+  raise "Expected 'aaa', got #{'zz'.succ.inspect}" unless 'zz'.succ == 'aaa'
+  raise "Expected 'AAA', got #{'ZZ'.succ.inspect}" unless 'ZZ'.succ == 'AAA'
+  raise "Expected '100', got #{'99'.succ.inspect}" unless '99'.succ == '100'
+  raise "Expected '10A00a00A', got #{'9Z99z99Z'.succ.inspect}" unless '9Z99z99Z'.succ == '10A00a00A'
+
+  # Mixed ASCII + alphanumeric prepend cases.
+  raise "Expected 'AAAA0000', got #{'ZZZ9999'.succ.inspect}" unless 'ZZZ9999'.succ == 'AAAA0000'
+  raise "Expected '/[]10000', got #{'/[]9999'.succ.inspect}" unless '/[]9999'.succ == '/[]10000'
+  raise "Expected '/[]AAAA0000', got #{'/[]ZZZ9999'.succ.inspect}" unless '/[]ZZZ9999'.succ == '/[]AAAA0000'
+  raise "Expected 'AA/[]AAA0000', got #{'Z/[]ZZZ9999'.succ.inspect}" unless 'Z/[]ZZZ9999'.succ == 'AA/[]AAA0000'
+
+  # Non-alphanumeric-only strings increment as bytes.
+  raise "Expected '**+', got #{'***'.succ.inspect}" unless '***'.succ == '**+'
+  raise "Expected '**a', got #{'**`'.succ.inspect}" unless '**`'.succ == '**a'
+
+  # `succ` is aliased to `next`.
+  raise 'Expected next to be aliased to succ' unless 'abcd'.next == 'abcd'.succ
+
+  # `next!` mutates in place and returns self.
+  s = 'abcd'.dup
+  result = s.next!
+  raise 'Expected next! to return self' unless result.equal?(s)
+  raise "Expected 'abce', got #{s.inspect}" unless s == 'abce'
 end
 
 ########################################

@@ -871,8 +871,102 @@ class String
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-next
+  #
+  # Returns the successor to `self`, computed by incrementing the
+  # rightmost alphanumeric character (digit rolls 0..9, lowercase
+  # letter rolls a..z, uppercase letter rolls A..Z). When the
+  # increment overflows, the carry propagates left to the next
+  # alphanumeric character — non-alphanumerics are passed over
+  # untouched. If the carry escapes past the leftmost alphanumeric,
+  # a new character of the same class (`1`, `a`, or `A`) is inserted
+  # immediately before the position of the leftmost alphanumeric.
+  #
+  # For strings containing no alphanumerics, the rightmost byte is
+  # incremented as an unsigned 8-bit value, with overflow carrying
+  # left; if every byte overflows, a `\x01` byte is prepended.
+  #
+  # Empty strings return an empty string. Matches ruby/spec
+  # `core/string/shared/succ.rb`.
   def next
-    raise NotImplementedError
+    return dup if empty?
+
+    bytes = self.bytes
+
+    # Walk right-to-left, incrementing alphanumerics and letting any
+    # overflow carry through non-alphanumerics to the next alnum to the
+    # left. `leftmost_alnum` tracks the position of the most recent
+    # alnum we touched so that we know where to insert a fresh digit
+    # / letter if the carry falls off the left end.
+    leftmost_alnum = nil
+    i = bytes.length - 1
+    carry = true
+    while i >= 0 && carry
+      b = bytes[i]
+      klass =
+        if b >= 0x30 && b <= 0x39 # 0-9
+          :digit
+        elsif b >= 0x61 && b <= 0x7A # a-z
+          :lower
+        elsif b >= 0x41 && b <= 0x5A # A-Z
+          :upper
+        else
+          :none
+        end
+
+      if klass == :none
+        i -= 1
+        next
+      end
+
+      leftmost_alnum = i
+
+      case klass
+      when :digit
+        if b == 0x39 # '9' → '0', carry
+          bytes[i] = 0x30
+        else
+          bytes[i] = b + 1
+          carry = false
+        end
+      when :lower
+        if b == 0x7A # 'z' → 'a', carry
+          bytes[i] = 0x61
+        else
+          bytes[i] = b + 1
+          carry = false
+        end
+      when :upper
+        if b == 0x5A # 'Z' → 'A', carry
+          bytes[i] = 0x41
+        else
+          bytes[i] = b + 1
+          carry = false
+        end
+      end
+      i -= 1
+    end
+
+    if leftmost_alnum.nil?
+      # No alphanumerics at all — increment as bytes.
+      return String.__succ_non_alnum(bytes)
+    end
+
+    if carry
+      # Carry escaped past the leftmost alphanumeric. Insert a fresh
+      # character of the same class immediately before it, matching
+      # CRuby: `"z".succ == "aa"`, `"Z".succ == "AA"`, `"9".succ == "10"`.
+      insert_char =
+        case bytes[leftmost_alnum]
+        when 0x30 then 0x31 # digit run, prepend '1'
+        when 0x61 then 0x61 # lower run, prepend 'a'
+        when 0x41 then 0x41 # upper run, prepend 'A'
+        else
+          0x31
+        end
+      bytes.insert(leftmost_alnum, insert_char)
+    end
+
+    bytes.pack('C*')
   end
   alias succ next
 
@@ -880,9 +974,30 @@ class String
   def next!
     raise FrozenError, "can't modify frozen String: #{inspect}" if frozen?
 
-    raise NotImplementedError
+    replace(succ)
   end
   alias succ! next!
+
+  # Internal helper for `String#next` on strings that have no
+  # alphanumeric characters. Increments the rightmost byte as an
+  # unsigned 8-bit value and propagates the carry left; if every byte
+  # overflows, prepends a `\x01` byte (matches
+  # `"\xFF\xFF".succ == "\x01\x00\x00"`).
+  def self.__succ_non_alnum(bytes)
+    i = bytes.length - 1
+    while i >= 0
+      b = bytes[i]
+      if b == 0xFF
+        bytes[i] = 0x00
+        i -= 1
+      else
+        bytes[i] = b + 1
+        return bytes.pack('C*')
+      end
+    end
+    bytes.unshift(0x01)
+    bytes.pack('C*')
+  end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-oct
   #
