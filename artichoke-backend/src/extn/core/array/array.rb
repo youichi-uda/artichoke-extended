@@ -1172,12 +1172,131 @@ class Array
     self
   end
 
-  def repeated_combination(_num)
-    raise NotImplementedError
+  # Yields every repeated combination of length `num` from the receiver
+  # (multisets of size `num` drawn from `self`, in lexicographic index
+  # order). With a block, yields each combination in turn and returns
+  # `self`; without a block, currently materialises into an Array since
+  # Artichoke's `Enumerator` wrapper for lazy generators is not yet
+  # wired up to this method — the materialised form is still useful for
+  # `.to_a.sort` patterns the ruby/spec tests rely on.
+  #
+  # Negative `num` yields nothing (and still returns `self` when a
+  # block is given). `num == 0` yields exactly one empty combination.
+  # Matches ruby/spec `core/array/repeated_combination_spec.rb`.
+  def repeated_combination(num, &block)
+    n = num.respond_to?(:to_int) ? num.to_int : num
+    raise TypeError, "no implicit conversion of #{num.class} into Integer" unless n.is_a?(Integer)
+
+    if block.nil?
+      result = []
+      __each_repeated_combination(n) { |c| result << c }
+      return result
+    end
+
+    __each_repeated_combination(n, &block)
+    self
   end
 
-  def repeated_permutation(_num)
-    raise NotImplementedError
+  # Yields every repeated permutation of length `num` from the receiver
+  # (length-`num` tuples whose elements are drawn from `self`, with
+  # replacement and ordering). With a block, yields each permutation in
+  # turn and returns `self`; without a block, materialises into an
+  # Array like `repeated_combination`.
+  #
+  # Negative `num` yields nothing. `num == 0` yields exactly one empty
+  # permutation. Matches ruby/spec
+  # `core/array/repeated_permutation_spec.rb`.
+  def repeated_permutation(num, &block)
+    n = num.respond_to?(:to_int) ? num.to_int : num
+    raise TypeError, "no implicit conversion of #{num.class} into Integer" unless n.is_a?(Integer)
+
+    if block.nil?
+      result = []
+      __each_repeated_permutation(n) { |p| result << p }
+      return result
+    end
+
+    __each_repeated_permutation(n, &block)
+    self
+  end
+
+  # Internal helper that yields each repeated combination of length `n`.
+  # For `n == 0` yields a single `[]`. For negative `n` yields nothing.
+  def __each_repeated_combination(n)
+    return if n.negative?
+
+    if n.zero?
+      yield []
+      return
+    end
+
+    len = length
+    return if len.zero?
+
+    # Iterative: walk an index vector in non-decreasing order, yielding
+    # the materialised tuple at each step, then advance the vector like
+    # an odometer whose digits can't decrease.
+    indices = Array.new(n, 0)
+    loop do
+      tuple = Array.new(n)
+      i = 0
+      while i < n
+        tuple[i] = self[indices[i]]
+        i += 1
+      end
+      yield tuple
+
+      # Advance the rightmost index that can still grow, then fill the
+      # tail with copies so the vector stays non-decreasing.
+      k = n - 1
+      k -= 1 while k >= 0 && indices[k] == len - 1
+      break if k.negative?
+
+      indices[k] += 1
+      fill = indices[k]
+      j = k + 1
+      while j < n
+        indices[j] = fill
+        j += 1
+      end
+    end
+  end
+
+  # Internal helper that yields each repeated permutation of length `n`.
+  # Same edge cases as `__each_repeated_combination`.
+  def __each_repeated_permutation(n)
+    return if n.negative?
+
+    if n.zero?
+      yield []
+      return
+    end
+
+    len = length
+    return if len.zero?
+
+    # Odometer over `n` unconstrained digits, base = length.
+    indices = Array.new(n, 0)
+    loop do
+      tuple = Array.new(n)
+      i = 0
+      while i < n
+        tuple[i] = self[indices[i]]
+        i += 1
+      end
+      yield tuple
+
+      # Increment from the right; each digit rolls independently.
+      k = n - 1
+      while k >= 0
+        indices[k] += 1
+        break if indices[k] < len
+
+        indices[k] = 0
+        k -= 1
+      end
+      break if k.negative?
+    end
   end
 
   def replace(other)

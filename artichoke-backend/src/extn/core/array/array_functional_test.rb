@@ -34,6 +34,8 @@ def spec
   zip
   product
   sample
+  repeated_combination
+  repeated_permutation
 end
 
 def empty_get
@@ -706,6 +708,78 @@ def sample
   # Options hash is accepted (even if not yet routed to a custom RNG).
   result = [1, 2, 3, 4].sample(2, {})
   raise "Expected size 2 with options hash, got #{result.size}" unless result.size == 2
+end
+
+########################################
+# Array#repeated_combination
+########################################
+
+def repeated_combination
+  a = [10, 11, 12]
+
+  # Two-element combinations (with replacement).
+  result = a.repeated_combination(2).sort
+  expected = [[10, 10], [10, 11], [10, 12], [11, 11], [11, 12], [12, 12]]
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # Three-element combinations.
+  result = a.repeated_combination(3).sort
+  expected = [[10, 10, 10], [10, 10, 11], [10, 10, 12], [10, 11, 11], [10, 11, 12],
+              [10, 12, 12], [11, 11, 11], [11, 11, 12], [11, 12, 12], [12, 12, 12]]
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # Length 0 yields one empty combination.
+  raise 'Expected [[]]' unless a.repeated_combination(0) == [[]]
+  raise 'Expected [[]]' unless [].repeated_combination(0) == [[]]
+
+  # Negative length yields nothing and returns self when given a block.
+  counter = 0
+  result = a.repeated_combination(-1) { |_| counter += 1 }
+  raise 'Expected return == self for negative length' unless result.equal?(a)
+  raise "Expected 0 yields for negative length, got #{counter}" unless counter == 0
+
+  # Block form: returns self.
+  counter = 0
+  result = a.repeated_combination(2) { |_| counter += 1 }
+  raise 'Expected block form to return self' unless result.equal?(a)
+  raise "Expected 6 yields, got #{counter}" unless counter == 6
+
+  # Empty receiver + nonzero length → nothing.
+  raise 'Expected []' unless [].repeated_combination(3) == []
+end
+
+########################################
+# Array#repeated_permutation
+########################################
+
+def repeated_permutation
+  a = [10, 11, 12]
+
+  # Two-element permutations (with replacement).
+  result = a.repeated_permutation(2).sort
+  expected = [[10, 10], [10, 11], [10, 12], [11, 10], [11, 11], [11, 12],
+              [12, 10], [12, 11], [12, 12]]
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # Length 0 yields one empty permutation.
+  raise 'Expected [[]]' unless a.repeated_permutation(0) == [[]]
+  raise 'Expected [[]]' unless [].repeated_permutation(0) == [[]]
+
+  # Empty receiver + nonzero length yields nothing.
+  raise 'Expected []' unless [].repeated_permutation(10) == []
+
+  # Handles duplicates correctly.
+  dup_src = [10, 11, 10]
+  result = dup_src.repeated_permutation(2).sort
+  expected = [[10, 10], [10, 10], [10, 10], [10, 10], [10, 11],
+              [10, 11], [11, 10], [11, 10], [11, 11]]
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # Block form: returns self.
+  counter = 0
+  result = a.repeated_permutation(2) { |_| counter += 1 }
+  raise 'Expected block form to return self' unless result.equal?(a)
+  raise "Expected 9 yields, got #{counter}" unless counter == 9
 end
 
 spec if $PROGRAM_NAME == __FILE__
