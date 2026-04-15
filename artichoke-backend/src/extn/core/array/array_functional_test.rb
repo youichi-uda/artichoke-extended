@@ -33,6 +33,7 @@ def spec
   min
   zip
   product
+  sample
 end
 
 def empty_get
@@ -605,6 +606,62 @@ def product
   raise "Expected block result to be self, got #{result.inspect}" unless result.equal?([1, 2]) || result == [1, 2]
   expected_yielded = [[1, 3], [1, 4], [2, 3], [2, 4]]
   raise "Expected yielded #{expected_yielded.inspect}, got #{yielded.inspect}" unless yielded == expected_yielded
+end
+
+########################################
+# Array#sample
+########################################
+
+def sample
+  # Empty array, zero-arg form → nil.
+  raise "Expected nil, got #{[].sample.inspect}" unless [].sample.nil?
+
+  # Single element, zero-arg form → that element.
+  raise "Expected 4, got #{[4].sample.inspect}" unless [4].sample == 4
+
+  # Zero-arg form on a multi-element array returns something from the
+  # array. We can't assert which one (it's random), but we can assert
+  # membership.
+  array = [1, 2, 3, 4]
+  10.times do
+    pick = array.sample
+    raise "sample #{pick.inspect} not in #{array.inspect}" unless array.include?(pick)
+  end
+
+  # Zero-count form returns [].
+  raise "Expected [], got #{[4].sample(0).inspect}" unless [4].sample(0) == []
+
+  # Integer count form returns an Array instance.
+  result = [1, 2, 3, 4].sample(3)
+  raise "Expected Array, got #{result.class}" unless result.is_a?(Array)
+  raise "Expected size 3, got #{result.size}" unless result.size == 3
+  # All returned elements are from the source.
+  result.each do |el|
+    raise "sampled #{el.inspect} not in source" unless array.include?(el)
+  end
+
+  # Count larger than the array clamps to array length.
+  result = [1, 2, 3, 4].sample(20)
+  raise "Expected size 4, got #{result.size}" unless result.size == 4
+  # And with distinct source values, the result contains each exactly once.
+  raise "Expected sorted result to equal source, got #{result.sort.inspect}" unless result.sort == array
+
+  # Duplicate source may return duplicates.
+  result = [4, 4].sample(2)
+  raise "Expected [4,4], got #{result.inspect}" unless result == [4, 4]
+
+  # Negative count raises ArgumentError.
+  raised = false
+  begin
+    [1, 2].sample(-1)
+  rescue ArgumentError
+    raised = true
+  end
+  raise 'Expected ArgumentError for negative count' unless raised
+
+  # Options hash is accepted (even if not yet routed to a custom RNG).
+  result = [1, 2, 3, 4].sample(2, {})
+  raise "Expected size 2 with options hash, got #{result.size}" unless result.size == 2
 end
 
 spec if $PROGRAM_NAME == __FILE__

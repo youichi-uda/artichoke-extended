@@ -1199,8 +1199,67 @@ class Array
     replace(rotate(count))
   end
 
-  def sample(*_args)
-    raise NotImplementedError, 'TODO implement in Rust'
+  # Returns one or more randomly-chosen elements from `self` using the
+  # `Kernel#rand`-compatible random source. With no argument, returns a
+  # single element (or `nil` for an empty array). With an integer `n`,
+  # returns an Array of up to `n` distinct elements (fewer if the
+  # receiver has fewer elements).
+  #
+  # Matches ruby/spec `core/array/sample_spec.rb` for the integer-arity
+  # forms. The `random:` / options-hash keyword surface is accepted for
+  # arity parity with CRuby but still routes through `Kernel#rand`;
+  # plugging in a user-supplied `Random` instance will follow once the
+  # Random core class is wired up.
+  def sample(*args)
+    # No arguments: return a single element uniformly.
+    if args.empty?
+      len = length
+      return nil if len.zero?
+
+      return self[rand(len)]
+    end
+
+    raise ArgumentError, "wrong number of arguments (given #{args.length}, expected 0..2)" if args.length > 2
+
+    count_arg = args[0]
+    options = args[1]
+    raise TypeError, "no implicit conversion of #{options.class} into Hash" if options && !options.is_a?(Hash)
+
+    count =
+      if count_arg.is_a?(Integer)
+        count_arg
+      elsif count_arg.respond_to?(:to_int)
+        converted = count_arg.to_int
+        unless converted.is_a?(Integer)
+          raise TypeError,
+                "can't convert #{count_arg.class} to Integer (#{count_arg.class}#to_int gives #{converted.class})"
+        end
+        converted
+      else
+        raise TypeError, "no implicit conversion of #{count_arg.class} into Integer"
+      end
+
+    raise ArgumentError, 'negative sample number' if count.negative?
+    return [] if count.zero?
+
+    len = length
+    return [] if len.zero?
+
+    # Clamp: you can't sample more distinct elements than the array holds.
+    count = len if count > len
+
+    # Partial Fisher-Yates: pull `count` elements without replacement by
+    # swapping the picked element to the "used" tail of a mutable copy.
+    pool = dup
+    result = Array.new(count)
+    i = 0
+    while i < count
+      pick = rand(len - i)
+      result[i] = pool[pick]
+      pool[pick] = pool[len - i - 1]
+      i += 1
+    end
+    result
   end
 
   def select(&block)
