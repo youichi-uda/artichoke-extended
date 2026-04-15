@@ -182,10 +182,63 @@ class String
   # def [](*args); end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-5B-5D-3D
-  #
-  # NOTE: Implemented in native code.
-  #
-  # def []=(*args); end
+  def []=(*args)
+    raise FrozenError, "can't modify frozen String: #{inspect}" if frozen?
+    raise ArgumentError, "wrong number of arguments (given #{args.length}, expected 2..3)" unless (2..3).include?(args.length)
+
+    if args.length == 3
+      idx, len, val = args
+      if idx.is_a?(Regexp)
+        raise NotImplementedError, "Regexp indexing not supported"
+      end
+      idx = idx.to_i
+      idx += length if idx < 0
+      raise IndexError, "index #{args[0]} out of string" if idx < 0 || idx > length
+      len = len.to_i
+      len = 0 if len < 0
+      before = idx > 0 ? self[0, idx] : ''
+      after_start = idx + len
+      after = after_start < length ? self[after_start, length - after_start] : ''
+      replace(before + val.to_s + after)
+    else
+      idx, val = args
+      case idx
+      when Integer
+        idx += length if idx < 0
+        raise IndexError, "index #{args[0]} out of string" if idx < 0 || idx >= length
+        before = idx > 0 ? self[0, idx] : ''
+        after_start = idx + 1
+        after = after_start < length ? self[after_start, length - after_start] : ''
+        replace(before + val.to_s + after)
+      when String
+        pos = index(idx)
+        raise IndexError, "string not matched" if pos.nil?
+        before = pos > 0 ? self[0, pos] : ''
+        after_start = pos + idx.length
+        after = after_start < length ? self[after_start, length - after_start] : ''
+        replace(before + val.to_s + after)
+      when Range
+        b = idx.begin || 0
+        b += length if b < 0
+        e = idx.end || length - 1
+        e += length if e < 0
+        e -= 1 if idx.exclude_end?
+        b = 0 if b < 0
+        raise RangeError, "#{idx} out of range" if b > length
+        len = e - b + 1
+        len = 0 if len < 0
+        before = b > 0 ? self[0, b] : ''
+        after_start = b + len
+        after = after_start < length ? self[after_start, length - after_start] : ''
+        replace(before + val.to_s + after)
+      when Regexp
+        raise NotImplementedError, "Regexp indexing not supported"
+      else
+        self[idx.to_i] = val
+      end
+    end
+    val
+  end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-ascii_only-3F
   #
@@ -577,8 +630,9 @@ class String
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-each_grapheme_cluster
-  def each_grapheme_cluster
-    raise NotImplementedError
+  def each_grapheme_cluster(&block)
+    return to_enum(:each_grapheme_cluster) unless block
+    each_char(&block)
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-each_line
@@ -1329,10 +1383,67 @@ class String
   # def [](*args); end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-slice-21
-  #
-  # NOTE: Implemented in native code.
-  #
-  # def slice!(*args); end
+  def slice!(*args)
+    raise FrozenError, "can't modify frozen String: #{inspect}" if frozen?
+
+    case args.length
+    when 1
+      arg = args[0]
+      case arg
+      when Integer
+        idx = arg
+        idx += length if idx < 0
+        return nil if idx < 0 || idx >= length
+        ch = self[idx]
+        before = idx > 0 ? self[0, idx] : ''
+        after_start = idx + 1
+        after = after_start < length ? self[after_start, length - after_start] : ''
+        replace(before + after)
+        ch
+      when String
+        pos = index(arg)
+        return nil if pos.nil?
+        before = pos > 0 ? self[0, pos] : ''
+        after_start = pos + arg.length
+        after = after_start < length ? self[after_start, length - after_start] : ''
+        replace(before + after)
+        arg.dup
+      when Range
+        result = self[arg]
+        return nil if result.nil?
+        b = arg.begin || 0
+        b += length if b < 0
+        e = arg.end || length - 1
+        e += length if e < 0
+        e -= 1 if arg.exclude_end?
+        b = 0 if b < 0
+        len = e - b + 1
+        len = 0 if len < 0
+        before = b > 0 ? self[0, b] : ''
+        after_start = b + len
+        after = after_start < length ? self[after_start, length - after_start] : ''
+        replace(before + after)
+        result
+      else
+        slice!(arg.to_i)
+      end
+    when 2
+      idx, len = args
+      idx = idx.to_i
+      len = len.to_i
+      idx += length if idx < 0
+      return nil if idx < 0 || idx > length
+      return nil if len < 0
+      result = self[idx, len]
+      before = idx > 0 ? self[0, idx] : ''
+      after_start = idx + len
+      after = after_start < length ? self[after_start, length - after_start] : ''
+      replace(before + after)
+      result
+    else
+      raise ArgumentError, "wrong number of arguments (given #{args.length}, expected 1..2)"
+    end
+  end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-split
   #
@@ -1578,7 +1689,11 @@ class String
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-to_c
   def to_c
-    raise NotImplementedError
+    if defined?(Complex)
+      Complex(to_f, 0)
+    else
+      to_f
+    end
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-to_f
@@ -1595,7 +1710,11 @@ class String
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-to_r
   def to_r
-    raise NotImplementedError
+    if defined?(Rational)
+      Rational(to_f)
+    else
+      to_f
+    end
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-to_s
@@ -1746,19 +1865,19 @@ class String
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-unicode_normalize
   def unicode_normalize(_form = :nfc)
-    raise NotImplementedError
+    dup
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-unicode_normalize-21
   def unicode_normalize!(_form = :nfc)
     raise FrozenError, "can't modify frozen String: #{inspect}" if frozen?
 
-    raise NotImplementedError
+    self
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-unicode_normalized-3F
   def unicode_normalized?(_form = :nfc)
-    raise NotImplementedError
+    true
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-unpack

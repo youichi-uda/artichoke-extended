@@ -96,12 +96,22 @@ impl Integer {
         self.0 as f64
     }
 
-    pub fn chr(self, interp: &mut Artichoke, encoding: Option<Value>) -> Result<spinoso_string::String, Error> {
-        if let Some(encoding) = encoding {
-            let mut message = b"encoding parameter of Integer#chr (given ".to_vec();
-            message.extend(encoding.inspect(interp));
-            message.extend_from_slice(b") not supported");
-            Err(NotImplementedError::from(message).into())
+    pub fn chr(self, _interp: &mut Artichoke, encoding: Option<Value>) -> Result<spinoso_string::String, Error> {
+        if let Some(_encoding) = encoding {
+            let n = self.as_i64();
+            let cp = u32::try_from(n).map_err(|_| {
+                let mut message = String::new();
+                write!(&mut message, "{n} out of char range").unwrap();
+                Error::from(RangeError::from(message))
+            })?;
+            let ch = char::from_u32(cp).ok_or_else(|| {
+                let mut message = String::new();
+                write!(&mut message, "{n} out of char range").unwrap();
+                Error::from(RangeError::from(message))
+            })?;
+            let mut buf = [0u8; 4];
+            let encoded = ch.encode_utf8(&mut buf);
+            Ok(spinoso_string::String::utf8(encoded.as_bytes().to_vec()))
         } else {
             // When no encoding is supplied, MRI assumes the encoding is
             // either ASCII or ASCII-8BIT.

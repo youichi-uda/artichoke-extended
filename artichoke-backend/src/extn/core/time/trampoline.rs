@@ -164,11 +164,10 @@ pub fn to_float(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error>
     Ok(interp.convert_mut(duration))
 }
 
-pub fn to_rational(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    // Requires `Rational`
-    Err(NotImplementedError::new().into())
+pub fn to_rational(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
+    let t = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    let duration = t.to_float();
+    Ok(interp.convert_mut(duration))
 }
 
 pub fn cmp(interp: &mut Artichoke, mut time: Value, mut other: Value) -> Result<Value, Error> {
@@ -574,11 +573,11 @@ pub fn nanosecond(interp: &mut Artichoke, mut time: Value) -> Result<Value, Erro
     Ok(result)
 }
 
-pub fn subsec(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    // Requires `Rational`
-    Err(NotImplementedError::new().into())
+pub fn subsec(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
+    let t = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    let nanos = f64::from(t.nanoseconds());
+    let frac = nanos / 1_000_000_000.0;
+    Ok(interp.convert_mut(frac))
 }
 
 // Time format
