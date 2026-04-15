@@ -304,8 +304,107 @@ class String
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-count
-  def count(other_str, *rest)
-    raise NotImplementedError
+  #
+  # Returns the number of characters in `self` that are contained in the
+  # intersection of all argument sets. Each argument is a "character set"
+  # string with the same parsing rules as `String#tr`:
+  #
+  #   - A leading `^` negates the set ("every character NOT in ...").
+  #     A set consisting of just `"^"` is literal, not a negation.
+  #   - `a-z` defines an inclusive byte range, but a literal `-` at the
+  #     start or end of the set (or immediately after the `^` negation
+  #     marker) is matched literally.
+  #   - A backslash `\\` escapes the next character.
+  #
+  # Raises `ArgumentError` if called with no arguments. Matches ruby/spec
+  # `core/string/count_spec.rb`.
+  def count(*args)
+    raise ArgumentError, 'wrong number of arguments (given 0, expected 1+)' if args.empty?
+
+    # Parse each argument into a (negated, lookup_table) tuple. We work on
+    # raw bytes so that binary-encoded strings (`"hello\x00\x00"`) behave
+    # byte-for-byte, matching the count_spec assertions.
+    sets = args.map { |a| String.__parse_char_set(a) }
+
+    bytes = self.bytes
+    total = 0
+    idx = 0
+    len = bytes.length
+    while idx < len
+      byte = bytes[idx]
+      included = true
+      set_idx = 0
+      set_count = sets.length
+      while set_idx < set_count
+        negated, lookup = sets[set_idx]
+        present = lookup[byte]
+        if negated ? present : !present
+          included = false
+          break
+        end
+        set_idx += 1
+      end
+      total += 1 if included
+      idx += 1
+    end
+    total
+  end
+
+  # Internal helper for parsing `String#count` / `#tr` / `#squeeze` /
+  # `#delete` character-set specifications. Returns `[negated, lookup]`
+  # where `lookup` is a 256-entry boolean array indexed by byte value.
+  def self.__parse_char_set(spec)
+    bytes = spec.bytes
+    lookup = Array.new(256, false)
+
+    # A lone `^` is the literal character, not a negation marker.
+    negated = bytes.length > 1 && bytes[0] == 0x5E # '^'
+    i = negated ? 1 : 0
+
+    # Collect the literal characters into a temporary buffer so that we
+    # can decide per-position whether `-` is a range operator or a
+    # literal. The spec's rule is: `-` is literal if it's the first or
+    # last character in the set (after any negation marker).
+    chars = []
+    escape_next = false
+    while i < bytes.length
+      byte = bytes[i]
+      if escape_next
+        chars << byte
+        escape_next = false
+        i += 1
+        next
+      end
+      if byte == 0x5C # '\\'
+        escape_next = true
+        i += 1
+        next
+      end
+      chars << byte
+      i += 1
+    end
+
+    # Walk `chars` and materialise the set, treating `-` as a range
+    # operator only when it has a character both before it and after it.
+    j = 0
+    first_idx = 0
+    last_idx = chars.length - 1
+    while j < chars.length
+      c = chars[j]
+      if c == 0x2D && j != first_idx && j != last_idx # '-'
+        start_byte = chars[j - 1]
+        end_byte = chars[j + 1]
+        if end_byte >= start_byte
+          (start_byte..end_byte).each { |b| lookup[b] = true }
+        end
+        j += 2 # skip past `-` and the end char
+        next
+      end
+      lookup[c] = true
+      j += 1
+    end
+
+    [negated, lookup]
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-crypt

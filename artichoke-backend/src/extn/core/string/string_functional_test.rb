@@ -17,6 +17,7 @@ def spec
   test_string_to_f
   test_string_hex
   test_string_oct
+  test_string_count
   test_string_eq
 
   test_string_concat
@@ -512,6 +513,63 @@ def test_string_oct
   # Leading underscore is always an error.
   raise "Expected 0, got #{'_7'.oct.inspect}" unless '_7'.oct == 0
   raise "Expected 0, got #{'_07'.oct.inspect}" unless '_07'.oct == 0
+end
+
+########################################
+# 10e. count
+########################################
+
+def test_string_count
+  # Basic set membership.
+  s = "hello\nworld\x00\x00"
+  raise "Expected #{s.size}, got #{s.count(s)}" unless s.count(s) == s.size
+  raise "Expected 5, got #{s.count('lo').inspect}" unless s.count('lo') == 5
+  raise "Expected 3, got #{s.count('eo').inspect}" unless s.count('eo') == 3
+  raise "Expected 3, got #{s.count('l').inspect}" unless s.count('l') == 3
+  raise "Expected 1, got #{s.count("\n").inspect}" unless s.count("\n") == 1
+  raise "Expected 2, got #{s.count("\x00").inspect}" unless s.count("\x00") == 2
+
+  # Empty argument set → nothing counted.
+  raise "Expected 0, got #{s.count('').inspect}" unless s.count('') == 0
+  raise "Expected 0, got #{''.count('').inspect}" unless ''.count('') == 0
+
+  # Intersection of multiple sets (char must match every set).
+  raise 'Expected s.count("l","lo") == s.count("l")' unless s.count('l', 'lo') == s.count('l')
+  raise 'Expected 0 intersection' unless s.count('l', 'lo', 'o') == 0
+  raise 'Expected s.count("h")' unless s.count('helo', 'hel', 'h') == s.count('h')
+  raise 'Expected 0 with empty arg in list' unless s.count('helo', '', 'x') == 0
+
+  # No arguments → ArgumentError.
+  raised = false
+  begin
+    'hello'.count
+  rescue ArgumentError
+    raised = true
+  end
+  raise 'Expected ArgumentError for zero-arg count' unless raised
+
+  # Negation with leading `^`.
+  s2 = "^hello\nworld\x00\x00"
+  raise "Expected 1, got #{s2.count('^').inspect}" unless s2.count('^') == 1 # lone `^` is literal
+  raise "Expected 9, got #{s2.count('^leh').inspect}" unless s2.count('^leh') == 9
+  raise "Expected 12, got #{s2.count('^o').inspect}" unless s2.count('^o') == 12
+
+  # Negation combined with intersection.
+  raise 'Expected count("ho") intersection' unless s2.count('helo', '^el') == s2.count('ho')
+
+  raise 'Expected "^_^".count("^^") == 1' unless '^_^'.count('^^') == 1
+  raise 'Expected "oa^_^o".count("a^") == 3' unless 'oa^_^o'.count('a^') == 3
+
+  # Ranges.
+  s3 = 'hel-[()]-lo012^'
+  raise "Expected #{s3.size}" unless s3.count("\x00-\xFF") == s3.size
+  raise 'Expected 3' unless s3.count('ej-m') == 3
+  raise 'Expected 2' unless s3.count('e-h') == 2
+
+  # Literal `-` at start/end of the set.
+  raise 'Expected dash literal' unless s3.count('-') == 2
+  raise 'Expected e+dash' unless s3.count('e-') == s3.count('e') + s3.count('-')
+  raise 'Expected dash+h' unless s3.count('-h') == s3.count('h') + s3.count('-')
 end
 
 ########################################
