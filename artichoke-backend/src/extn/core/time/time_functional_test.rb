@@ -11,6 +11,10 @@ def spec
   end
 
   time_initialize
+  time_hash
+  time_utc_offset
+  time_timezone
+  time_to_a
 end
 
 ########################################
@@ -67,6 +71,79 @@ def time_initialize
     raised = true
   end
   raise 'Expected ArgumentError for day 32' unless raised
+end
+
+########################################
+# Time#hash
+########################################
+
+def time_hash
+  # Same instant → same hash.
+  t1 = Time.utc(2026, 4, 15, 12, 0, 0)
+  t2 = Time.utc(2026, 4, 15, 12, 0, 0)
+  raise 'Expected equal hashes for equal Times' unless t1.hash == t2.hash
+
+  # `hash` returns an Integer.
+  raise "Expected Integer, got #{t1.hash.class}" unless t1.hash.is_a?(Integer)
+
+  # Different instants → hashes are (overwhelmingly) different.
+  t3 = Time.utc(2026, 4, 15, 12, 0, 1)
+  raise 'Expected distinct hashes for distinct Times' unless t1.hash != t3.hash
+
+  # Time can be used as a Hash key now.
+  table = { t1 => 'a' }
+  raise 'Expected table[t2] == "a" (Hash lookup by Time key)' unless table[t2] == 'a'
+end
+
+########################################
+# Time#utc_offset
+########################################
+
+def time_utc_offset
+  t = Time.utc(2026, 4, 15)
+  raise "Expected 0 for UTC time, got #{t.utc_offset.inspect}" unless t.utc_offset == 0
+
+  # `gmt_offset` is an alias in CRuby; skip if not defined.
+  raise 'Expected utc_offset to be Integer' unless t.utc_offset.is_a?(Integer)
+end
+
+########################################
+# Time#timezone
+########################################
+
+def time_timezone
+  t = Time.utc(2026, 4, 15)
+  zone = t.zone
+  raise "Expected zone to be a String, got #{zone.class}" unless zone.is_a?(String)
+  raise "Expected UTC time zone to be 'UTC', got #{zone.inspect}" unless zone == 'UTC'
+end
+
+########################################
+# Time#to_a
+########################################
+
+def time_to_a
+  t = Time.utc(2026, 4, 15, 12, 34, 56)
+  arr = t.to_a
+  raise "Expected Array, got #{arr.class}" unless arr.is_a?(Array)
+  raise "Expected 10 elements, got #{arr.length}" unless arr.length == 10
+
+  # [sec, min, hour, mday, month, year, wday, yday, isdst, zone]
+  raise "Expected sec 56, got #{arr[0].inspect}" unless arr[0] == 56
+  raise "Expected min 34, got #{arr[1].inspect}" unless arr[1] == 34
+  raise "Expected hour 12, got #{arr[2].inspect}" unless arr[2] == 12
+  raise "Expected mday 15, got #{arr[3].inspect}" unless arr[3] == 15
+  raise "Expected month 4, got #{arr[4].inspect}" unless arr[4] == 4
+  raise "Expected year 2026, got #{arr[5].inspect}" unless arr[5] == 2026
+
+  # wday is 0..6 (Sunday = 0). 2026-04-15 is a Wednesday → 3.
+  raise "Expected wday 3 (Wed), got #{arr[6].inspect}" unless arr[6] == 3
+  # yday is day-of-year; 2026 is not a leap year, April 15 = 31+28+31+15 = 105
+  raise "Expected yday 105, got #{arr[7].inspect}" unless arr[7] == 105
+
+  raise 'Expected isdst to be Boolean' unless arr[8].equal?(true) || arr[8].equal?(false)
+
+  raise "Expected zone to be 'UTC', got #{arr[9].inspect}" unless arr[9] == 'UTC'
 end
 
 ##

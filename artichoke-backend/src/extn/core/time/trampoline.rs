@@ -1,5 +1,8 @@
 //! Glue between mruby FFI and `Time` Rust implementation.
 
+use core::hash::BuildHasher as _;
+
+use artichoke_core::hash::Hash as _;
 use spinoso_time::strftime::{
     ASCTIME_FORMAT_STRING,
     Error::{FormattedStringTooLarge, InvalidFormatString, WriteZero},
@@ -7,6 +10,7 @@ use spinoso_time::strftime::{
 
 use crate::convert::implicitly_convert_to_int;
 use crate::convert::to_str;
+use crate::extn::core::array::Array;
 use crate::extn::core::string::{Encoding, String};
 use crate::extn::core::time::{Offset, Time, args::Args, subsec::Subsec};
 use crate::extn::prelude::*;
@@ -190,10 +194,29 @@ pub fn eql(interp: &mut Artichoke, mut time: Value, mut other: Value) -> Result<
     }
 }
 
-pub fn hash(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    Err(NotImplementedError::new().into())
+pub fn hash(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
+    // CRuby hashes a Time based on its instant (seconds + subsecond
+    // nanoseconds). This matches `Time#==` / `Time#eql?`, which also
+    // compare only the instant and not the timezone, so two Times that
+    // compare equal will have equal hashes — the contract every `Hash`
+    // and `Set` key must satisfy.
+    //
+    // We compose the two 64-bit components into an 128-bit byte sequence
+    // and feed that through the same randomised hasher the rest of the
+    // core classes use (e.g. `String#hash`), so hash values are stable
+    // within a single VM run and are seeded per-run for DoS resistance.
+    let t = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    let seconds = t.to_int();
+    let nanos = t.nanoseconds();
+    let mut buf = [0_u8; 16];
+    buf[..8].copy_from_slice(&seconds.to_ne_bytes());
+    buf[8..12].copy_from_slice(&nanos.to_ne_bytes());
+    // Leave bytes [12..16] zero so we always feed a fixed-width payload.
+    let hash = interp.global_build_hasher()?.hash_one(&buf[..]);
+    // bit-cast to `i64` because CRuby's `Object#hash` returns a signed
+    // Integer; the sign of the hash is not observable.
+    let hash = i64::from_ne_bytes(hash.to_ne_bytes());
+    Ok(interp.convert(hash))
 }
 
 pub fn initialize<T>(interp: &mut Artichoke, time: Value, args: T) -> Result<Value, Error>
@@ -286,11 +309,28 @@ pub fn to_string(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error
     strftime_with_encoding(interp, time, format.as_bytes(), Encoding::Utf8)
 }
 
-pub fn to_array(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
-    // Need to implement `Convert` for timezone offset.
-    let _ = interp;
-    let _ = time;
-    Err(NotImplementedError::new().into())
+pub fn to_array(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
+    // Matches CRuby `Time#to_a`, which returns a 10-element Array:
+    //   [sec, min, hour, mday, month, year, wday, yday, isdst, zone]
+    //
+    // Every component except `zone` is an Integer or Boolean; `zone` is
+    // the IANA short name (`"UTC"`, `"JST"`, etc.).
+    let t = unsafe { Time::unbox_from_value(&mut time, interp)? };
+
+    let sec = interp.convert(i64::from(t.second()));
+    let min = interp.convert(i64::from(t.minute()));
+    let hour = interp.convert(i64::from(t.hour()));
+    let mday = interp.convert(i64::from(t.day()));
+    let month = interp.convert(i64::from(t.month()));
+    let year = interp.convert(i64::from(t.year()));
+    let wday = interp.convert(i64::from(t.day_of_week()));
+    let yday = interp.convert(i64::from(t.day_of_year()));
+    let isdst = interp.convert(t.is_dst());
+    let zone = interp.try_convert_mut(t.time_zone().to_owned())?;
+
+    let elements = vec![sec, min, hour, mday, month, year, wday, yday, isdst, zone];
+    let array = Array::from(elements);
+    Array::alloc_value(array, interp)
 }
 
 // Math
@@ -416,16 +456,24 @@ pub fn is_dst(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
     Ok(interp.convert(is_dst))
 }
 
-pub fn timezone(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    Err(NotImplementedError::new().into())
+pub fn timezone(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
+    // Returns the IANA short name of the Time's stored offset, e.g.
+    // `"UTC"`, `"JST"`, or `"+09:00"` for fixed offsets. `spinoso-time`
+    // materialises this from the local `tz-rs` time-type, so we only
+    // need to copy the string into a managed Ruby String.
+    let t = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    let zone = t.time_zone().to_owned();
+    interp.try_convert_mut(zone)
 }
 
-pub fn utc_offset(interp: &mut Artichoke, time: Value) -> Result<Value, Error> {
-    let _ = interp;
-    let _ = time;
-    Err(NotImplementedError::new().into())
+pub fn utc_offset(interp: &mut Artichoke, mut time: Value) -> Result<Value, Error> {
+    // Returns the number of seconds east of UTC for the Time's local
+    // offset. `spinoso-time` already computes this against the stored
+    // `tz-rs` offset so we just forward the call and promote the `i32`
+    // result to the `i64` Integer that CRuby exposes.
+    let t = unsafe { Time::unbox_from_value(&mut time, interp)? };
+    let offset_seconds = i64::from(t.utc_offset());
+    Ok(interp.convert(offset_seconds))
 }
 
 // Timezone mode
