@@ -28,6 +28,10 @@ def spec
   dynamic_pop
 
   reverse
+
+  max
+  min
+  zip
 end
 
 def empty_get
@@ -446,6 +450,118 @@ def reverse
   a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
   a.reverse!
   raise unless a == [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+end
+
+########################################
+# Array#max
+########################################
+
+def max
+  # Empty array returns nil.
+  raise "Expected [].max to be nil, got #{[].max.inspect}" unless [].max.nil?
+
+  # Single-element array returns the element.
+  raise "Expected [1].max to be 1, got #{[1].max.inspect}" unless [1].max == 1
+  raise "Expected [-5].max to be -5, got #{[-5].max.inspect}" unless [-5].max == -5
+
+  # Integer arrays.
+  raise "Expected [1,2].max == 2, got #{[1, 2].max.inspect}" unless [1, 2].max == 2
+  raise "Expected [2,1].max == 2, got #{[2, 1].max.inspect}" unless [2, 1].max == 2
+  raise "Expected [18,42].max == 42" unless [18, 42].max == 42
+  raise "Expected [2,5,3,6,1,4].max == 6" unless [2, 5, 3, 6, 1, 4].max == 6
+
+  # String arrays.
+  raise "Expected strings max == 'tt'" unless %w[aa tt].max == 'tt'
+  raise "Expected strings max == '4'" unless %w[2 33 4 11].max == '4'
+
+  # With block as comparator.
+  result = %w[2 33 4 11].max { |a, b| a <=> b }
+  raise "Expected block max == '4', got #{result.inspect}" unless result == '4'
+
+  result = [2, 33, 4, 11].max { |a, b| a <=> b }
+  raise "Expected block max == 33, got #{result.inspect}" unless result == 33
+
+  # Reversed comparator finds the minimum.
+  result = %w[2 33 4 11].max { |a, b| b <=> a }
+  raise "Expected reversed block max == '11', got #{result.inspect}" unless result == '11'
+
+  # Block receives (el, current_max) pairwise.
+  yielded = []
+  [1, 2, 3, 4, 5].max { |el, _cur| yielded << el; el }
+  raise "Expected yielded [2,3,4,5], got #{yielded.inspect}" unless yielded == [2, 3, 4, 5]
+
+  # Homogeneous nested arrays (Array#<=> is lexicographic).
+  raise "Expected [[6,7,8,9]]" unless [[1, 2], [3, 4, 5], [6, 7, 8, 9]].max == [6, 7, 8, 9]
+end
+
+########################################
+# Array#min
+########################################
+
+def min
+  # Empty array returns nil.
+  raise "Expected [].min to be nil, got #{[].min.inspect}" unless [].min.nil?
+
+  # Single-element array returns the element.
+  raise "Expected [1].min to be 1, got #{[1].min.inspect}" unless [1].min == 1
+
+  # Integer arrays.
+  raise "Expected [1,2].min == 1, got #{[1, 2].min.inspect}" unless [1, 2].min == 1
+  raise "Expected [2,1].min == 1, got #{[2, 1].min.inspect}" unless [2, 1].min == 1
+  raise "Expected [2,5,3,6,1,4].min == 1" unless [2, 5, 3, 6, 1, 4].min == 1
+
+  # String arrays.
+  raise "Expected strings min == 'aa'" unless %w[aa tt].min == 'aa'
+
+  # With block as comparator.
+  result = [2, 33, 4, 11].min { |a, b| a <=> b }
+  raise "Expected block min == 2, got #{result.inspect}" unless result == 2
+
+  # Reversed comparator finds the maximum.
+  result = [2, 33, 4, 11].min { |a, b| b <=> a }
+  raise "Expected reversed block min == 33, got #{result.inspect}" unless result == 33
+
+  # Block yields the last length-1 values.
+  yielded = []
+  [1, 2, 3, 4, 5].min { |el, _cur| yielded << el; -el }
+  raise "Expected yielded [2,3,4,5], got #{yielded.inspect}" unless yielded == [2, 3, 4, 5]
+end
+
+########################################
+# Array#zip
+########################################
+
+def zip
+  # Equal length arrays.
+  result = [1, 2, 3, 4].zip(%w[a b c d e])
+  expected = [[1, 'a'], [2, 'b'], [3, 'c'], [4, 'd']]
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # Shorter argument — missing values become nil.
+  result = [1, 2, 3, 4, 5].zip(%w[a b c d])
+  expected = [[1, 'a'], [2, 'b'], [3, 'c'], [4, 'd'], [5, nil]]
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # Multiple arguments.
+  result = [1, 2, 3].zip([4, 5, 6], [7, 8, 9])
+  expected = [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # Zero arguments — one-tuples.
+  result = [1, 2, 3].zip
+  expected = [[1], [2], [3]]
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # Empty self.
+  result = [].zip([1, 2, 3])
+  raise "Expected [], got #{result.inspect}" unless result == []
+
+  # Block form returns nil and yields each tuple.
+  values = []
+  block_result = [1, 2, 3, 4].zip(%w[a b c d e]) { |v| values << v }
+  raise "Expected block zip to return nil, got #{block_result.inspect}" unless block_result.nil?
+  expected_values = [[1, 'a'], [2, 'b'], [3, 'c'], [4, 'd']]
+  raise "Expected block yielded #{expected_values.inspect}, got #{values.inspect}" unless values == expected_values
 end
 
 spec if $PROGRAM_NAME == __FILE__

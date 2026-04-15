@@ -851,12 +851,86 @@ class Array
     self
   end
 
-  def max(*)
-    raise NotImplementedError
+  # Returns the maximum element. With a block, the block is used as a
+  # comparator between each subsequent element and the running maximum.
+  #
+  # For empty arrays, returns `nil`. For single-element arrays, returns the
+  # element. Behaviour matches ruby/spec `core/array/max_spec.rb`.
+  #
+  # The optional `n` argument (`max(2)`) is not yet supported and raises
+  # `NotImplementedError`, matching the previous behaviour for that overload.
+  def max(n = nil, &block)
+    raise NotImplementedError, 'Array#max(n) is not yet implemented' unless n.nil?
+
+    len = length
+    return nil if len.zero?
+
+    result = self[0]
+    idx = 1
+    if block
+      while idx < len
+        el = self[idx]
+        cmp = block.call(el, result)
+        raise ArgumentError, 'comparison of elements failed' if cmp.nil?
+        unless cmp.is_a?(Integer)
+          raise ArgumentError, 'comparison of elements failed'
+        end
+
+        result = el if cmp > 0
+        idx += 1
+      end
+    else
+      while idx < len
+        el = self[idx]
+        cmp = el <=> result
+        raise ArgumentError, "comparison of #{el.class} with #{result.class} failed" if cmp.nil?
+
+        result = el if cmp > 0
+        idx += 1
+      end
+    end
+    result
   end
 
-  def min(*)
-    raise NotImplementedError
+  # Returns the minimum element. With a block, the block is used as a
+  # comparator between each subsequent element and the running minimum.
+  #
+  # For empty arrays, returns `nil`. For single-element arrays, returns the
+  # element. Behaviour matches ruby/spec `core/array/min_spec.rb`.
+  #
+  # The optional `n` argument (`min(2)`) is not yet supported and raises
+  # `NotImplementedError`, matching the previous behaviour for that overload.
+  def min(n = nil, &block)
+    raise NotImplementedError, 'Array#min(n) is not yet implemented' unless n.nil?
+
+    len = length
+    return nil if len.zero?
+
+    result = self[0]
+    idx = 1
+    if block
+      while idx < len
+        el = self[idx]
+        cmp = block.call(el, result)
+        raise ArgumentError, 'comparison of elements failed' if cmp.nil?
+        unless cmp.is_a?(Integer)
+          raise ArgumentError, 'comparison of elements failed'
+        end
+
+        result = el if cmp < 0
+        idx += 1
+      end
+    else
+      while idx < len
+        el = self[idx]
+        cmp = el <=> result
+        raise ArgumentError, "comparison of #{el.class} with #{result.class} failed" if cmp.nil?
+
+        result = el if cmp < 0
+        idx += 1
+      end
+    end
+    result
   end
 
   def none?(pattern = (not_set = true), &block)
@@ -1343,8 +1417,66 @@ class Array
     ary
   end
 
-  def zip(*_args)
-    raise NotImplementedError
+  # Returns an array of tuples pairing elements of `self` with elements at
+  # the corresponding index of each argument. Missing values are padded with
+  # `nil`. If a block is given, yields each tuple and returns `nil`.
+  #
+  # Arguments are coerced with `#to_ary` if possible; otherwise, if they
+  # respond to `#each`, they are materialised via iteration. This mirrors
+  # `Enumerable#zip` / ruby/spec `core/array/zip_spec.rb`.
+  def zip(*others, &block)
+    # Coerce each argument into an Array. Per spec, `#to_ary` is tried first,
+    # and any object that doesn't respond is fed through `#each`.
+    arrays = others.map do |other|
+      if other.is_a?(Array)
+        other
+      elsif other.respond_to?(:to_ary)
+        converted = other.to_ary
+        unless converted.is_a?(Array)
+          classname = other.class
+          raise TypeError,
+                "can't convert #{classname} to Array (#{classname}#to_ary gives #{converted.class})"
+        end
+        converted
+      elsif other.respond_to?(:each)
+        # Materialise the iterable. `Array#zip` consumes "lazily" in CRuby,
+        # stopping at `self.length`, so we only pull as many as we need.
+        collected = []
+        limit = length
+        other.each do |item|
+          break if collected.length >= limit
+
+          collected << item
+        end
+        collected
+      else
+        classname = other.class
+        raise TypeError, "wrong argument type #{classname} (must respond to :each)"
+      end
+    end
+
+    if block
+      idx = 0
+      len = length
+      while idx < len
+        tuple = [self[idx]]
+        arrays.each { |arr| tuple << arr[idx] }
+        block.call(tuple)
+        idx += 1
+      end
+      nil
+    else
+      result = []
+      idx = 0
+      len = length
+      while idx < len
+        tuple = [self[idx]]
+        arrays.each { |arr| tuple << arr[idx] }
+        result << tuple
+        idx += 1
+      end
+      result
+    end
   end
 
   def |(other)
