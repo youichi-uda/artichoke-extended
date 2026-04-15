@@ -988,8 +988,94 @@ class Array
     end
   end
 
-  def product(*_args)
-    raise NotImplementedError
+  # Returns the Cartesian product of `self` and each of the argument arrays.
+  # If a block is given, yields each tuple in turn and returns `self`.
+  #
+  # Matches ruby/spec `core/array/product_spec.rb`:
+  #   [1,2].product([3,4,5], [6,8])
+  #   # => [[1,3,6], [1,3,8], [1,4,6], [1,4,8], [1,5,6], [1,5,8],
+  #   #     [2,3,6], [2,3,8], [2,4,6], [2,4,8], [2,5,6], [2,5,8]]
+  #
+  # Each argument must already be an Array or support `#to_ary`.
+  # `nil`, `Range`, and other iterables are rejected with `TypeError`,
+  # matching CRuby: `[1].product(2..3)` raises.
+  def product(*others, &block)
+    # Coerce arguments to Arrays via `#to_ary`. Unlike `zip`, `product` does
+    # NOT fall back to `#each` — the spec requires a `TypeError` for things
+    # like Ranges, so we reject anything that isn't already an Array and
+    # doesn't respond to `#to_ary`.
+    arrays = others.map do |other|
+      if other.is_a?(Array)
+        other
+      elsif other.respond_to?(:to_ary)
+        converted = other.to_ary
+        unless converted.is_a?(Array)
+          classname = other.class
+          raise TypeError,
+                "can't convert #{classname} to Array (#{classname}#to_ary gives #{converted.class})"
+        end
+        converted
+      else
+        raise TypeError, "no implicit conversion of #{other.class} into Array"
+      end
+    end
+
+    # Guard against accidental DoS. CRuby raises RangeError when the total
+    # number of tuples would exceed what a C `long` can hold; we use
+    # 2**62 - 1 as a conservative cap that keeps the Ruby-level behaviour
+    # consistent with ruby/spec's `a.product(a,a,a,...)` over-use assertion.
+    factor_count = length
+    arrays.each do |arr|
+      len = arr.length
+      # Short-circuit: any empty factor means the product is empty.
+      if len.zero?
+        return self if block
+
+        return []
+      end
+      factor_count *= len
+      raise RangeError, 'too big to product' if factor_count > ((1 << 62) - 1)
+    end
+
+    if length.zero?
+      return self if block
+
+      return []
+    end
+
+    factors = [self] + arrays
+    total_factors = factors.length
+    indices = Array.new(total_factors, 0)
+    results = block ? nil : []
+
+    loop do
+      # Materialise the current tuple.
+      tuple = Array.new(total_factors)
+      i = 0
+      while i < total_factors
+        tuple[i] = factors[i][indices[i]]
+        i += 1
+      end
+
+      if block
+        block.call(tuple)
+      else
+        results << tuple
+      end
+
+      # Increment like an odometer, from the rightmost position.
+      pos = total_factors - 1
+      while pos >= 0
+        indices[pos] += 1
+        break if indices[pos] < factors[pos].length
+
+        indices[pos] = 0
+        pos -= 1
+      end
+      break if pos < 0
+    end
+
+    block ? self : results
   end
 
   def rassoc(obj)

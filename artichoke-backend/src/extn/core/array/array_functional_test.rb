@@ -32,6 +32,7 @@ def spec
   max
   min
   zip
+  product
 end
 
 def empty_get
@@ -562,6 +563,48 @@ def zip
   raise "Expected block zip to return nil, got #{block_result.inspect}" unless block_result.nil?
   expected_values = [[1, 'a'], [2, 'b'], [3, 'c'], [4, 'd']]
   raise "Expected block yielded #{expected_values.inspect}, got #{values.inspect}" unless values == expected_values
+end
+
+########################################
+# Array#product
+########################################
+
+def product
+  # Empty receiver — no tuples.
+  raise "Expected [], got #{[].product([1, 2]).inspect}" unless [].product([1, 2]) == []
+
+  # Single factor with no arguments — one-tuples of self.
+  raise "Expected [[1],[2]], got #{[1, 2].product.inspect}" unless [1, 2].product == [[1], [2]]
+
+  # Simple two-factor product.
+  result = [1, 2].product([3, 4])
+  expected = [[1, 3], [1, 4], [2, 3], [2, 4]]
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # Three-factor product (reference from ruby/spec).
+  result = [1, 2].product([3, 4, 5], [6, 8])
+  expected = [[1, 3, 6], [1, 3, 8], [1, 4, 6], [1, 4, 8], [1, 5, 6], [1, 5, 8],
+              [2, 3, 6], [2, 3, 8], [2, 4, 6], [2, 4, 8], [2, 5, 6], [2, 5, 8]]
+  raise "Expected #{expected.inspect}, got #{result.inspect}" unless result == expected
+
+  # Empty argument array → empty product.
+  raise "Expected [], got #{[1, 2].product([]).inspect}" unless [1, 2].product([]) == []
+
+  # Non-Array, non-to_ary argument raises TypeError.
+  raised = false
+  begin
+    [1].product(2..3) # rubocop:disable Lint/LiteralInInterpolation
+  rescue TypeError
+    raised = true
+  end
+  raise 'Expected TypeError for Range argument' unless raised
+
+  # Block form yields each tuple and returns self.
+  yielded = []
+  result = [1, 2].product([3, 4]) { |t| yielded << t }
+  raise "Expected block result to be self, got #{result.inspect}" unless result.equal?([1, 2]) || result == [1, 2]
+  expected_yielded = [[1, 3], [1, 4], [2, 3], [2, 4]]
+  raise "Expected yielded #{expected_yielded.inspect}, got #{yielded.inspect}" unless yielded == expected_yielded
 end
 
 spec if $PROGRAM_NAME == __FILE__
