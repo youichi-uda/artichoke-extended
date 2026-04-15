@@ -20,6 +20,7 @@ def spec
   test_string_count
   test_string_rpartition
   test_string_succ
+  test_string_sum
   test_string_eq
 
   test_string_concat
@@ -679,6 +680,28 @@ def test_string_succ
   result = s.next!
   raise 'Expected next! to return self' unless result.equal?(s)
   raise "Expected 'abce', got #{s.inspect}" unless s == 'abce'
+end
+
+########################################
+# 10h. sum
+########################################
+
+def test_string_sum
+  # Reference values from ruby/spec.
+  raise "Expected 450, got #{'ruby'.sum.inspect}" unless 'ruby'.sum == 450
+  raise "Expected 194, got #{'ruby'.sum(8).inspect}" unless 'ruby'.sum(8) == 194
+  raise "Expected 881, got #{'rubinius'.sum(23).inspect}" unless 'rubinius'.sum(23) == 881
+
+  # n_bits <= 0 returns the raw byte sum.
+  raise "Expected 363, got #{'xyz'.sum(0).inspect}" unless 'xyz'.sum(0) == 363
+  raise "Expected 363, got #{'xyz'.sum(-10).inspect}" unless 'xyz'.sum(-10) == 363
+
+  # Default `n_bits` is 16.
+  raise "Expected #{'hello'.sum(16)}, got #{'hello'.sum}" unless 'hello'.sum == 'hello'.sum(16)
+
+  # Empty string sums to 0.
+  raise "Expected 0, got #{''.sum.inspect}" unless ''.sum == 0
+  raise "Expected 0, got #{''.sum(0).inspect}" unless ''.sum(0) == 0
 end
 
 ########################################

@@ -1438,8 +1438,33 @@ class String
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-sum
+  #
+  # Returns a basic `n_bits`-bit checksum of the bytes in `self`: the
+  # raw byte sum folded into `2 ** n_bits`, or the raw byte sum if
+  # `n_bits <= 0`. This is the classic BSD `sum(1)`-style checksum —
+  # fast and DoS-free, not cryptographic.
+  #
+  # Matches ruby/spec `core/string/sum_spec.rb`.
   def sum(n_bits = 16)
-    raise NotImplementedError
+    n =
+      if n_bits.is_a?(Integer)
+        n_bits
+      elsif n_bits.respond_to?(:to_int)
+        converted = n_bits.to_int
+        unless converted.is_a?(Integer)
+          raise TypeError,
+                "can't convert #{n_bits.class} to Integer (#{n_bits.class}#to_int gives #{converted.class})"
+        end
+        converted
+      else
+        raise TypeError, "no implicit conversion of #{n_bits.class} into Integer"
+      end
+
+    total = 0
+    bytes.each { |b| total += b }
+    return total if n <= 0
+
+    total & ((1 << n) - 1)
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-swapcase
