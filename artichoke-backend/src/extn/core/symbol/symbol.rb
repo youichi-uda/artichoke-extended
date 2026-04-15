@@ -50,8 +50,15 @@ class Symbol
   # Implemented in native code.
   # def empty?; end
 
+  # https://ruby-doc.org/core-3.0.2/Symbol.html#method-i-encoding
+  #
+  # mruby treats every string — and therefore every symbol — as UTF-8.
+  # Return `Encoding::UTF_8` to match `String#encoding`'s stub so that
+  # `:hello.encoding == "hello".encoding` holds and callers can use
+  # `Symbol#encoding` in comparisons and hash lookups without blowing
+  # up on `NotImplementedError`.
   def encoding
-    raise NotImplementedError, 'Artichoke does not have Encoding support'
+    Encoding::UTF_8
   end
 
   # Implemented in native code.

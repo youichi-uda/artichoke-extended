@@ -58,3 +58,20 @@ impl BoxUnboxVmValue for Symbol {
         let _ = data;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::test::prelude::*;
+
+    const SUBJECT: &str = "Symbol";
+    const FUNCTIONAL_TEST: &[u8] = include_bytes!("symbol_functional_test.rb");
+
+    #[test]
+    fn functional() {
+        let mut interp = interpreter();
+        let result = interp.eval(FUNCTIONAL_TEST);
+        unwrap_or_panic_with_backtrace(&mut interp, SUBJECT, result);
+        let result = interp.eval(b"spec");
+        unwrap_or_panic_with_backtrace(&mut interp, SUBJECT, result);
+    }
+}
