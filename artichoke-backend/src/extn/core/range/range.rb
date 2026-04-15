@@ -227,8 +227,16 @@ class Range
 
       delta + 1
     elsif range_begin.respond_to?(:succ) && range_end.respond_to?(:succ)
-      # TODO: implement Range#size for object that responds to :succ
-      raise NotImplementedError
+      # For discrete types whose increment is only expressible via
+      # `#succ` (most notably `String` via `String#succ`, and any
+      # user-defined type that mixes in `Comparable` + `succ`), there is
+      # no closed-form count — we just iterate, which is also what
+      # CRuby's `Range#size` does internally for this branch. Callers
+      # that care about throughput on huge string ranges should avoid
+      # `#size` in favour of `#count` over a bounded slice.
+      count = 0
+      each { count += 1 }
+      count
     end
   end
 
