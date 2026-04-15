@@ -21,6 +21,7 @@ def spec
   test_string_rpartition
   test_string_succ
   test_string_sum
+  test_string_dump
   test_string_eq
 
   test_string_concat
@@ -702,6 +703,46 @@ def test_string_sum
   # Empty string sums to 0.
   raise "Expected 0, got #{''.sum.inspect}" unless ''.sum == 0
   raise "Expected 0, got #{''.sum(0).inspect}" unless ''.sum(0) == 0
+end
+
+########################################
+# 10i. dump
+########################################
+
+def test_string_dump
+  # Wraps in double quotes.
+  raise "Expected '\"foo\"', got #{'foo'.dump.inspect}" unless 'foo'.dump == '"foo"'
+
+  # Named escapes for control chars.
+  raise "Expected '\"\\\\a\"', got #{"\a".dump.inspect}" unless "\a".dump == '"\\a"'
+  raise "Expected '\"\\\\t\"', got #{"\t".dump.inspect}" unless "\t".dump == '"\\t"'
+  raise "Expected '\"\\\\n\"', got #{"\n".dump.inspect}" unless "\n".dump == '"\\n"'
+  raise "Expected '\"\\\\r\"', got #{"\r".dump.inspect}" unless "\r".dump == '"\\r"'
+
+  # Backslash and double-quote.
+  dq_dump = "\"".dump
+  raise "Expected '\"\\\\\"\"', got #{dq_dump.inspect}" unless dq_dump == "\"\\\"\"" # => "\""
+  bs_dump = "\\".dump
+  raise "Expected '\"\\\\\\\\\"', got #{bs_dump.inspect}" unless bs_dump == "\"\\\\\"" # => "\\"
+
+  # # is escaped only when followed by $ @ {
+  raise 'Expected "\\#$PATH"' unless '#$PATH'.dump == '"\\#$PATH"'
+  raise 'Expected "\\#{a}"' unless '#{a}'.dump == '"\\#{a}"'
+  raise 'Expected "#" literal' unless '#'.dump == '"#"'
+  raise 'Expected "#1" literal' unless '#1'.dump == '"#1"'
+
+  # Printable ASCII left alone.
+  raise 'Expected "A"' unless 'A'.dump == '"A"'
+  raise 'Expected " "' unless ' '.dump == '" "'
+  raise 'Expected "~"' unless '~'.dump == '"~"'
+
+  # Non-printable bytes in \xHH notation.
+  raise "Expected '\"\\\\x00\"', got #{0.chr.dump.inspect}" unless 0.chr.dump == '"\\x00"'
+  raise "Expected '\"\\\\x7F\"', got #{127.chr.dump.inspect}" unless 127.chr.dump == '"\\x7F"'
+  raise "Expected '\"\\\\x80\"', got #{128.chr.dump.inspect}" unless 128.chr.dump == '"\\x80"'
+
+  # Empty string.
+  raise 'Expected "\"\""' unless ''.dump == '""'
 end
 
 ########################################

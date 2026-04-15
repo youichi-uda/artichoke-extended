@@ -482,8 +482,59 @@ class String
   # def downcase!; end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-dump
+  #
+  # Returns a version of `self` wrapped in double-quotes, with all
+  # non-printable and special characters escaped so the result is a
+  # valid Ruby string literal that `eval` could reconstruct.
+  #
+  # Escaping rules (from ruby/spec `core/string/dump_spec.rb`):
+  #   - Named escapes for control chars: \a \b \t \n \v \f \r \e
+  #   - Backslash and double-quote are escaped: \\ \"
+  #   - `#` is escaped only when followed by `$`, `@`, or `{`:
+  #     `\#$`, `\#@`, `\#{`
+  #   - Printable ASCII (0x20..0x7E) left as-is.
+  #   - Everything else: `\xHH` hex notation per byte.
   def dump
-    raise NotImplementedError
+    out = '"'.b
+    raw = self.b.bytes
+    i = 0
+    len = raw.length
+    while i < len
+      b = raw[i]
+      case b
+      when 0x07 then out << '\\a'
+      when 0x08 then out << '\\b'
+      when 0x09 then out << '\\t'
+      when 0x0A then out << '\\n'
+      when 0x0B then out << '\\v'
+      when 0x0C then out << '\\f'
+      when 0x0D then out << '\\r'
+      when 0x1B then out << '\\e'
+      when 0x22 then out << '\\"'  # "
+      when 0x5C then out << '\\\\' # \
+      when 0x23 # '#'
+        nxt = raw[i + 1]
+        if nxt == 0x24 || nxt == 0x40 || nxt == 0x7B
+          out << '\\#'
+        else
+          out << '#'
+        end
+      else
+        if b >= 0x20 && b <= 0x7E
+          out << b.chr
+        else
+          hi = (b >> 4) & 0x0F
+          lo = b & 0x0F
+          out << '\\x'
+          out << (hi < 10 ? (0x30 + hi).chr : (0x41 + hi - 10).chr)
+          out << (lo < 10 ? (0x30 + lo).chr : (0x41 + lo - 10).chr)
+        end
+      end
+      i += 1
+    end
+    out << '"'
+    out.force_encoding(Encoding::UTF_8) if encoding == Encoding::UTF_8
+    out
   end
 
   # https://ruby-doc.org/core-3.0.2/String.html#method-i-each_byte
