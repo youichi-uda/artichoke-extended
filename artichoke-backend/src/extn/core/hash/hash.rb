@@ -455,6 +455,11 @@ class Hash
     self
   end
 
+  # Returns an array of values for the given keys.
+  def values_at(*keys)
+    keys.map { |k| self[k] }
+  end
+
   # Ruby 2.5+: Returns a new Hash containing only the specified keys.
   def slice(*keys)
     result = {}

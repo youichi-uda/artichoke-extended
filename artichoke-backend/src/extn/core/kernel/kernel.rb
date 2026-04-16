@@ -167,6 +167,110 @@ module Kernel
     nil
   end
 
+  alias fail raise
+
+  def Float(arg) # rubocop:disable Naming/MethodName
+    return arg if arg.is_a?(Float)
+    return arg.to_f if arg.respond_to?(:to_f)
+
+    raise TypeError, "can't convert #{arg.class} into Float"
+  end
+
+  def sleep(seconds = nil)
+    # Sandboxed — no-op. Returns 0.
+    0
+  end
+
+  def caller(*_args)
+    []
+  end
+
+  def __method__
+    nil
+  end
+
+  def __dir__
+    nil
+  end
+
+  def at_exit(&_block)
+    # No-op in sandboxed context.
+  end
+
+  def system(*_args)
+    # Sandboxed — no-op.
+    nil
+  end
+
+  def exec(*_args)
+    raise NotImplementedError, 'exec is not available in sandboxed mode'
+  end
+end
+
+# Minimal Struct implementation.
+class Struct
+  def self.new(*members, keyword_init: false, &block)
+    if members.first.is_a?(String)
+      name = members.shift
+    end
+
+    klass = Class.new(Struct) do
+      members.each { |m| attr_accessor m }
+
+      define_method(:initialize) do |*args, **kwargs|
+        if keyword_init || !kwargs.empty?
+          kwargs.each { |k, v| send(:"#{k}=", v) }
+        else
+          members.each_with_index { |m, i| send(:"#{m}=", args[i]) }
+        end
+      end
+
+      define_method(:members) { members.dup }
+
+      define_method(:to_a) do
+        members.map { |m| send(m) }
+      end
+      alias_method :values, :to_a
+      alias_method :deconstruct, :to_a
+
+      define_method(:to_h) do
+        h = {}
+        members.each { |m| h[m] = send(m) }
+        h
+      end
+
+      define_method(:==) do |other|
+        other.is_a?(self.class) && to_a == other.to_a
+      end
+
+      define_method(:inspect) do
+        pairs = members.map { |m| "#{m}=#{send(m).inspect}" }
+        "#<struct #{pairs.join(', ')}>"
+      end
+      alias_method :to_s, :inspect
+
+      define_method(:[]) do |key|
+        case key
+        when Integer then to_a[key]
+        when Symbol, String then send(key)
+        else raise TypeError
+        end
+      end
+
+      define_method(:[]=) do |key, value|
+        case key
+        when Integer then send(:"#{members[key]}=", value)
+        when Symbol, String then send(:"#{key}=", value)
+        else raise TypeError
+        end
+      end
+
+      class_eval(&block) if block
+    end
+
+    klass
+  end
+
   # Ruby 2.5+: Pretty-print objects to stdout using inspect.
   def pp(*objs)
     objs.each { |o| puts o.inspect }

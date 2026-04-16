@@ -66,6 +66,37 @@ class Integer
     self < 0
   end
 
+  # Greatest common divisor.
+  def gcd(other)
+    a = self.abs
+    b = other.to_i.abs
+    while b != 0
+      a, b = b, a % b
+    end
+    a
+  end
+
+  # Least common multiple.
+  def lcm(other)
+    other = other.to_i
+    return 0 if self == 0 || other == 0
+
+    (self * other).abs / gcd(other)
+  end
+
+  # Integer exponentiation. `pow(exp)` returns `self ** exp`.
+  # `pow(exp, mod)` returns `(self ** exp) % mod`.
+  def pow(exp, mod = nil)
+    if mod
+      base = self % mod
+      result = 1
+      exp.times { result = (result * base) % mod }
+      result
+    else
+      self ** exp
+    end
+  end
+
   alias round floor
   alias truncate floor
 end
