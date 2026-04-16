@@ -455,6 +455,32 @@ class Hash
     self
   end
 
+  # Ruby 2.5+: Returns a new Hash containing only the specified keys.
+  def slice(*keys)
+    result = {}
+    keys.each { |k| result[k] = self[k] if key?(k) }
+    result
+  end
+
+  # Ruby 2.4+: Returns a new Hash with nil values removed.
+  def compact
+    result = {}
+    each { |k, v| result[k] = v unless v.nil? }
+    result
+  end
+
+  # Ruby 2.4+: Removes nil-value pairs in place.
+  def compact!
+    changed = false
+    keys.each do |k|
+      if self[k].nil?
+        delete(k)
+        changed = true
+      end
+    end
+    changed ? self : nil
+  end
+
   alias each_pair each
   alias initialize_copy replace
   alias to_s inspect

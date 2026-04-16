@@ -166,4 +166,10 @@ module Kernel
     end
     nil
   end
+
+  # Ruby 2.5+: Pretty-print objects to stdout using inspect.
+  def pp(*objs)
+    objs.each { |o| puts o.inspect }
+    objs.length == 1 ? objs[0] : objs
+  end
 end

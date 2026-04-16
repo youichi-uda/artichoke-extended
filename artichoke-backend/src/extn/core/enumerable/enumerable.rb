@@ -631,6 +631,36 @@ module Enumerable
     result
   end
 
+  # Ruby 2.7+: Returns a hash counting occurrences of each element.
+  def tally
+    result = {}
+    each { |item| result[item] = (result[item] || 0) + 1 }
+    result
+  end
+
+  # Ruby 2.7+: Maps and filters in one pass — yields each element,
+  # and collects only truthy return values.
+  def filter_map
+    return to_enum(:filter_map) unless block_given?
+
+    result = []
+    each do |item|
+      val = yield item
+      result << val if val
+    end
+    result
+  end
+
+  # Ruby 2.4+: Returns the sum of elements, with an optional initial
+  # value (default 0). With a block, sums the block results.
+  def sum(init = 0)
+    if block_given?
+      inject(init) { |acc, item| acc + yield(item) }
+    else
+      inject(init) { |acc, item| acc + item }
+    end
+  end
+
   alias collect_concat flat_map
   alias find detect
   alias map collect
