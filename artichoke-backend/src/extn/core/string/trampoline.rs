@@ -1664,11 +1664,7 @@ fn parse_leading_float(bytes: &[u8]) -> f64 {
             buf.push(c);
             has_integer_digits = true;
             i += 1;
-        } else if c == b'_'
-            && has_integer_digits
-            && i + 1 < bytes.len()
-            && bytes[i + 1].is_ascii_digit()
-        {
+        } else if c == b'_' && has_integer_digits && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
             i += 1; // skip the underscore
         } else {
             break;
@@ -1692,11 +1688,7 @@ fn parse_leading_float(bytes: &[u8]) -> f64 {
                     buf.push(c);
                     has_fraction_digits = true;
                     i += 1;
-                } else if c == b'_'
-                    && has_fraction_digits
-                    && i + 1 < bytes.len()
-                    && bytes[i + 1].is_ascii_digit()
-                {
+                } else if c == b'_' && has_fraction_digits && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
                     i += 1;
                 } else {
                     break;
@@ -1739,11 +1731,7 @@ fn parse_leading_float(bytes: &[u8]) -> f64 {
                 buf.push(c);
                 has_exp_digits = true;
                 i += 1;
-            } else if c == b'_'
-                && has_exp_digits
-                && i + 1 < bytes.len()
-                && bytes[i + 1].is_ascii_digit()
-            {
+            } else if c == b'_' && has_exp_digits && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit() {
                 i += 1; // skip underscore between exponent digits
             } else {
                 break;
