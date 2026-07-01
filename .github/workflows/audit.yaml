@@ -17,12 +17,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
       - name: Install Ruby toolchain
-        uses: ruby/setup-ruby@44511735964dcb71245e7e55f72539531f7bc0eb # v1.257.0
+        uses: ruby/setup-ruby@0dafeac902942906541bc140009cdbf32665b601 # v1.315.0
         with:
           ruby-version: ".ruby-version"
           bundler-cache: true
@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -57,7 +57,7 @@ jobs:
             cargo generate-lockfile --verbose
           fi
 
-      - uses: EmbarkStudios/cargo-deny-action@f2ba7abc2abebaf185c833c3961145a3c275caad # v2.0.13
+      - uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe # v2.0.20
         with:
           arguments: --locked --all-features
           command: check ${{ matrix.checks }}
@@ -71,11 +71,11 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
       - name: Run zizmor 🌈
-        uses: zizmorcore/zizmor-action@5ca5fc7a4779c5263a3ffa0e1f693009994446d1 # v0.1.2
+        uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa # v0.5.7
         with:
           persona: "pedantic"

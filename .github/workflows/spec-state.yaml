@@ -18,7 +18,7 @@ jobs:
       RUST_BACKTRACE: 1
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           path: artichoke
           persist-credentials: false
@@ -94,7 +94,7 @@ jobs:
           JSON_DEST: ${{ steps.exceptions.outputs.json }}
 
       - name: Checkout spec state repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: artichoke/spec-state
           path: spec-state
